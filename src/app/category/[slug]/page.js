@@ -2,7 +2,6 @@ import Link from "next/link";
 import { dbConnect } from "@/lib/db";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
-import AssistantWidget from "@/features/assistant/AssistantWidget";
 
 export async function generateMetadata({ params }) {
   try {
@@ -151,7 +150,6 @@ export default async function CategoryPage({ params }) {
 
       </div>
 
-      <AssistantWidget />
     </main>
   );
 }

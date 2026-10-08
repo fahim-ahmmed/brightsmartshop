@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { dbConnect } from "@/lib/db";
 import Product from "@/models/Product";
 import ProductPurchase from "@/features/shop/components/ProductPurchase";
-import AssistantWidget from "@/features/assistant/AssistantWidget";
 
 // Dynamic Metadata
 export async function generateMetadata({ params }) {
@@ -180,7 +179,6 @@ export default async function ProductDetailPage({ params }) {
 
       </div>
 
-      <AssistantWidget />
     </main>
   );
 }

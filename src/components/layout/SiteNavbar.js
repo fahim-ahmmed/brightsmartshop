@@ -21,7 +21,6 @@ import {
 import { NAV_LINKS, SITE } from '@/lib/site';
 import CartSummary from './CartSummary';
 import { authClient } from '@/lib/auth-client';
-import { useAuthModal } from '@/features/auth/components/AuthModalProvider';
 
 const SearchIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -34,7 +33,6 @@ export default function SiteNavbar({ user }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { openRegister } = useAuthModal();
   const logout = () =>
     authClient.signOut({
       fetchOptions: {
@@ -120,7 +118,7 @@ export default function SiteNavbar({ user }) {
         ) : (
           <>
             <NavbarItem className="hidden md:flex">
-              <Button onPress={openRegister} variant="bordered" color="primary">
+              <Button as={NextLink} href="/register" variant="bordered" color="primary">
                 Register
               </Button>
             </NavbarItem>
@@ -169,16 +167,13 @@ export default function SiteNavbar({ user }) {
         ) : (
           <>
             <NavbarMenuItem>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  openRegister();
-                }}
-                className="block w-full py-2 text-left text-lg"
+              <NextLink
+                href="/register"
+                onClick={() => setMenuOpen(false)}
+                className="block w-full py-2 text-lg"
               >
                 Register
-              </button>
+              </NextLink>
             </NavbarMenuItem>
             <NavbarMenuItem>
               <NextLink href="/login" onClick={() => setMenuOpen(false)} className="block w-full py-2 text-lg font-semibold text-primary">

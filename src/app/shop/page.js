@@ -3,7 +3,6 @@ import { dbConnect } from "@/lib/db";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
 import ShopListing from "@/features/shop/components/ShopListing";
-import AssistantWidget from "@/features/assistant/AssistantWidget";
 
 export const metadata = {
   title: "Shop | Bright Smart Shop",
@@ -64,7 +63,6 @@ export default async function ShopPage({ searchParams }) {
 
       </div>
 
-      <AssistantWidget />
     </main>
   );
 }

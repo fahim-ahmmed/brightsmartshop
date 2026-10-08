@@ -3,7 +3,6 @@ import { dbConnect } from "@/lib/db";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
 import CategoryFilter from "@/features/shop/components/CategoryFilter";
-import AssistantWidget from "@/features/assistant/AssistantWidget";
 
 export const metadata = {
   title: "Categories | Bright Smart Shop",
@@ -82,7 +81,6 @@ export default async function CategoriesPage() {
 
       </div>
 
-      <AssistantWidget />
     </main>
   );
 }

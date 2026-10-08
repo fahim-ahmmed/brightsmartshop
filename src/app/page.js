@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import HeroSlider from "@/features/shop/components/HeroSlider";
 import ProductGrid from "@/features/shop/components/ProductGrid";
-import AssistantWidget from "@/features/assistant/AssistantWidget";
 import { getFeaturedProducts } from "@/features/shop/queries";
 
 export const metadata = {
@@ -129,7 +128,6 @@ export default async function HomePage() {
       </div>
 
       {/* Floating Smart Assistant Button */}
-      <AssistantWidget />
     </main>
   );
 }
