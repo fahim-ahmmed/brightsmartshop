@@ -6,6 +6,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+export function cloudinaryEnabled() {
+  return Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+}
+
 export async function uploadImageToCloudinary(file) {
   if (!file || typeof file === "string") return file; // যদি আগেই URL থাকে
 

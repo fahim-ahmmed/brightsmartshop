@@ -1,6 +1,7 @@
 import { dbConnect } from "@/lib/db";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
+import TeamMember from "@/models/TeamMember";
 
 /**
  * 1. Fetch Featured Products for Homepage Grid
@@ -43,6 +44,14 @@ export async function getCategories() {
     console.error("Error fetching categories:", error);
     return [];
   }
+}
+
+export async function getTeam() {
+  await dbConnect();
+  const members = await TeamMember.find({ isActive: { $ne: false } })
+    .sort({ order: 1, createdAt: 1 })
+    .lean();
+  return JSON.parse(JSON.stringify(members));
 }
 
 /**
