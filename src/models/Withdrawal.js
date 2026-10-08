@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const schema = new mongoose.Schema(
   {
-    userId: { type: String, required: true, index: true },
+    userId: { type: String, required: true },
     amountPaisa: { type: Number, required: true, min: 1, validate: Number.isInteger },
     method: { type: String, enum: ['bkash', 'nagad'], required: true },
     accountNumber: { type: String, required: true, trim: true },
