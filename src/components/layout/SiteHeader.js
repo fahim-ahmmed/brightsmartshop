@@ -4,19 +4,27 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import CartSummary from "./CartSummary";
+import { useCart } from "@/context/CartContext";
 
 export default function SiteHeader() {
   const router = useRouter();
-  
+
+  // Cart Context values
+  const cartContext = useCart();
+  const cartItems = cartContext?.cartItems || [];
+  const totalItemsCount = cartContext?.totalItemsCount || 0;
+  const totalAmount = cartContext?.totalAmount || 0;
+  const removeFromCart = cartContext?.removeFromCart || (() => {});
+
+  // Side Drawer Open/Close State
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
   // Safe Session Retrieval
   const sessionResult = authClient?.useSession ? authClient.useSession() : {};
   const session = sessionResult?.data;
   const isPending = sessionResult?.isPending;
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -25,24 +33,21 @@ export default function SiteHeader() {
     }
   };
 
-  // Strict Login Check
   const isLoggedIn = !isPending && !!session?.user;
 
   return (
-    <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-xs">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Main Navbar Row */}
-        <div className="h-16 sm:h-20 flex items-center justify-between gap-3">
+    <>
+      <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-2xs font-sans h-16 sm:h-20">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-3 sm:gap-6">
           
           {/* 1. Logo & Brand Title */}
           <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white border border-emerald-100 shadow-xs flex items-center justify-center p-1 group-hover:scale-105 transition-transform">
-              <span className="font-extrabold text-emerald-600 tracking-tighter text-lg sm:text-xl">
-                b<span className="text-orange-500">s</span>s
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#00875A] text-white shadow-md shadow-emerald-700/20 flex items-center justify-center p-1 group-hover:scale-105 transition-transform">
+              <span className="font-black tracking-tighter text-lg sm:text-xl">
+                b<span className="text-[#F25C05]">s</span>s
               </span>
             </div>
-            <span className="font-serif font-bold text-base sm:text-2xl text-emerald-800 tracking-tight">
+            <span className="font-serif font-black text-lg sm:text-2xl text-[#00875A] tracking-tight">
               Bright Smart Shop
             </span>
           </Link>
@@ -50,11 +55,11 @@ export default function SiteHeader() {
           {/* 2. Desktop Search Bar */}
           <form 
             onSubmit={handleSearch}
-            className="flex-1 max-w-md mx-4 hidden md:flex items-center bg-gray-50 border border-gray-200 rounded-full overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-600 transition-all"
+            className="flex-1 max-w-lg mx-2 hidden md:flex items-center bg-gray-50/80 border border-gray-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-[#00875A]/20 focus-within:border-[#00875A] transition-all shadow-2xs"
           >
-            <div className="pl-4 text-emerald-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <div className="pl-4 text-[#00875A]">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
             <input
@@ -62,175 +67,190 @@ export default function SiteHeader() {
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 bg-transparent text-sm text-gray-700 focus:outline-none placeholder:text-gray-400"
+              className="w-full px-3 py-2.5 bg-transparent text-xs sm:text-sm text-gray-700 focus:outline-none placeholder:text-gray-400 font-medium"
             />
             <button
               type="submit"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 transition-colors cursor-pointer"
+              className="bg-[#00875A] hover:bg-[#00704A] text-white font-black text-xs px-6 py-2.5 transition-colors cursor-pointer"
             >
               Search
             </button>
           </form>
 
-          {/* 3. Right Actions Area */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          {/* 3. Right Actions Area (Wishlist, Cart, Login, Register) */}
+          <div className="flex items-center gap-2 sm:gap-3">
             
-            {/* Mobile Search Toggle */}
+            {/* Wishlist Button */}
+            <Link
+              href="/wishlist"
+              className="relative flex items-center gap-2 px-3 py-2 rounded-2xl bg-rose-50/70 hover:bg-rose-100/80 text-rose-600 border border-rose-100 transition-all group cursor-pointer"
+            >
+              <div className="relative flex items-center justify-center">
+                <span className="text-lg group-hover:scale-110 transition-transform">❤️</span>
+                <span className="absolute -top-2.5 -right-2 bg-rose-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+                  0
+                </span>
+              </div>
+              <span className="hidden xl:inline text-xs font-black tracking-tight">
+                Wishlist
+              </span>
+            </Link>
+
+            {/* Cart Trigger Button */}
             <button
               type="button"
-              onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-              className="md:hidden p-2 text-gray-600 hover:text-emerald-600 rounded-lg cursor-pointer"
-              aria-label="Toggle Search"
+              onClick={() => setIsCartOpen(true)}
+              className="relative flex items-center gap-2.5 bg-emerald-50/80 hover:bg-emerald-100 text-[#00875A] px-3.5 py-2 rounded-2xl border border-emerald-200/60 transition-all cursor-pointer shadow-2xs group"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <div className="relative flex items-center justify-center">
+                <span className="text-lg group-hover:scale-110 transition-transform">🛒</span>
+                <span className="absolute -top-2.5 -right-2.5 bg-[#F25C05] text-white text-[9px] font-black min-w-[18px] h-4.5 px-1 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+                  {totalItemsCount}
+                </span>
+              </div>
+              <div className="hidden sm:block text-left leading-tight">
+                <span className="block text-gray-500 font-semibold text-[9px] uppercase tracking-wider">
+                  {totalItemsCount} {totalItemsCount === 1 ? "item" : "items"}
+                </span>
+                <span className="text-xs font-black text-gray-900">
+                  ৳{totalAmount.toFixed(2)}
+                </span>
+              </div>
             </button>
 
-            {/* Desktop Navigation Links */}
-            <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-gray-800">
-              <Link href="/shop" className="hover:text-emerald-600 transition-colors">
-                Shop
-              </Link>
-              <Link href="/categories" className="hover:text-emerald-600 transition-colors">
-                Categories
-              </Link>
-              <Link href="/wishlist" className="hover:text-emerald-600 transition-colors flex items-center gap-1.5">
-                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                <span>Wishlist</span>
-              </Link>
-            </nav>
-
-            <CartSummary />
-
-            {/* Auth Buttons (Desktop) */}
-            <div className="hidden lg:flex items-center gap-2">
+            {/* Auth Buttons */}
+            <div className="flex items-center gap-2 ml-1">
               {isLoggedIn ? (
                 <Link
                   href="/dashboard"
-                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 bg-[#00875A] hover:bg-[#00704A] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>📊</span> Dashboard
+                  <span>📊</span> 
+                  <span className="hidden sm:inline">Dashboard</span>
                 </Link>
               ) : (
                 <>
                   <Link
-                    href="/register"
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all inline-block"
+                    href="/login"
+                    className="px-4 py-2 border-2 border-gray-200 hover:border-[#00875A] text-gray-700 hover:text-[#00875A] text-xs font-extrabold rounded-2xl transition-all cursor-pointer bg-white"
                   >
-                    Register
+                    Login
                   </Link>
                   <Link
-                    href="/login"
-                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all inline-block"
+                    href="/register"
+                    className="px-4 py-2 bg-[#F25C05] hover:bg-[#D95000] text-white text-xs font-black rounded-2xl shadow-xs transition-all cursor-pointer"
                   >
-                    Log In
+                    Register
                   </Link>
                 </>
               )}
             </div>
 
-            {/* Mobile Menu Toggle Button */}
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-              aria-label="Toggle Mobile Menu"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isMobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-
           </div>
 
         </div>
+      </header>
 
-        {/* Expandable Mobile Search */}
-        {isMobileSearchOpen && (
-          <div className="md:hidden pb-4 pt-1">
-            <form onSubmit={handleSearch} className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-transparent text-gray-700 focus:outline-none"
-                autoFocus
-              />
-              <button type="submit" className="bg-emerald-600 text-white text-xs font-bold px-4 py-2">
-                Search
-              </button>
-            </form>
-          </div>
-        )}
+      {/* 4. SIDE DRAWER CART SLIDE-OVER */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden font-sans">
+          <div
+            onClick={() => setIsCartOpen(false)}
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+          />
 
-        {/* Mobile Dropdown Navigation Menu */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-gray-100 py-4 space-y-3 animate-in slide-in-from-top duration-200">
-            <nav className="flex flex-col space-y-2 font-semibold text-sm text-gray-700">
-              <Link 
-                href="/shop" 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="px-3 py-2 hover:bg-emerald-50 rounded-lg hover:text-emerald-600"
-              >
-                Shop
-              </Link>
-              <Link 
-                href="/categories" 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="px-3 py-2 hover:bg-emerald-50 rounded-lg hover:text-emerald-600"
-              >
-                Categories
-              </Link>
-              <Link 
-                href="/wishlist" 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="px-3 py-2 hover:bg-emerald-50 rounded-lg hover:text-emerald-600 flex items-center justify-between"
-              >
-                <span>Wishlist</span>
-                <span className="text-emerald-600">❤️</span>
-              </Link>
-            </nav>
-
-            <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
-              {isLoggedIn ? (
-                <Link
-                  href="/dashboard"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="w-full py-2.5 text-center bg-emerald-700 text-white font-bold text-sm rounded-xl"
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
+              
+              {/* Drawer Header */}
+              <div className="p-6 bg-[#00875A] text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🛒</span>
+                  <h2 className="text-lg font-black tracking-tight">Your Shopping Cart</h2>
+                  <span className="bg-white/20 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                    {totalItemsCount}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsCartOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-lg transition-colors cursor-pointer"
                 >
-                  📊 Go to Dashboard
-                </Link>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
+                  ✕
+                </button>
+              </div>
+
+              {/* Cart Items List */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {cartItems.length > 0 ? (
+                  cartItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl border border-gray-100">
+                          {item.image || "📦"}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">
+                            {item.title}
+                          </h4>
+                          <span className="text-xs font-bold text-[#00875A]">
+                            ৳ {item.price}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 transition-colors cursor-pointer"
+                        title="Remove Item"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-20 space-y-3">
+                    <div className="text-5xl">🛍️</div>
+                    <h3 className="font-extrabold text-sm text-gray-800">Your cart is empty</h3>
+                    <p className="text-xs text-gray-400 max-w-xs mx-auto">
+                      Explore our catalog and add items to your shopping cart!
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer Footer */}
+              {cartItems.length > 0 && (
+                <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
+                  <div className="flex items-center justify-between text-sm font-black text-gray-900">
+                    <span>Subtotal</span>
+                    <span className="text-[#00875A] text-lg">৳ {totalAmount.toFixed(2)}</span>
+                  </div>
+
                   <Link
-                    href="/register"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="py-2.5 text-center bg-emerald-600 text-white font-bold text-xs rounded-xl"
+                    href="/checkout"
+                    onClick={() => setIsCartOpen(false)}
+                    className="w-full py-3.5 bg-[#F25C05] hover:bg-[#D95000] text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
                   >
-                    Register
+                    <span>Proceed to Checkout</span>
+                    <span>→</span>
                   </Link>
-                  <Link
-                    href="/login"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="py-2.5 text-center bg-orange-500 text-white font-bold text-xs rounded-xl"
+
+                  <button
+                    onClick={() => setIsCartOpen(false)}
+                    className="w-full py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 text-center cursor-pointer"
                   >
-                    Log In
-                  </Link>
+                    Continue Shopping
+                  </button>
                 </div>
               )}
+
             </div>
           </div>
-        )}
-
-      </div>
-    </header>
+        </div>
+      )}
+    </>
   );
 }

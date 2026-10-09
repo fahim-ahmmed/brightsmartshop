@@ -18,12 +18,26 @@ const ProductSchema = new mongoose.Schema(
       required: [true, "Product price is required"],
       min: 0,
     },
+    originalPrice: {
+      type: Number,
+      default: 0,
+    },
     points: {
       type: Number,
       default: 0,
     },
     category: {
       type: String,
+      enum: [
+        "Grocery",
+        "Fashion",
+        "Cosmetics",
+        "Beauty Care",
+        "Health & Medicine",
+        "Electronics",
+        "Home & Kitchen",
+        "Offers",
+      ],
       required: [true, "Category is required"],
     },
     description: {
@@ -38,18 +52,17 @@ const ProductSchema = new mongoose.Schema(
       type: Number,
       default: 100,
     },
-    // Permanent retention flag (চিরস্থায়ী সংরক্ষণের জন্য)
     isActive: {
       type: Boolean,
       default: true,
     },
     isPermanent: {
       type: Boolean,
-      default: true, // এটি নিশ্চিত করবে প্রোডাক্ট রেকর্ড স্থায়ী থাকবে
+      default: true,
     },
   },
   {
-    timestamps: true, // প্রোডাক্ট আপলোডের তারিখ ও সময় স্থায়ীভাবে থাকবে
+    timestamps: true,
   }
 );
 

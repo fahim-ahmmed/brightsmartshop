@@ -1,86 +1,72 @@
+"use client";
+
+import React from "react";
 import Link from "next/link";
-import { dbConnect } from "@/lib/db";
-import Product from "@/models/Product";
-import Category from "@/models/Category";
-import CategoryFilter from "@/features/shop/components/CategoryFilter";
+import Footer from "@/components/layout/Footer";
 
-export const metadata = {
-  title: "Categories | Bright Smart Shop",
-  description: "Browse all product categories and packages at Bright Smart Shop.",
-};
+export const ALL_CATEGORIES_DATA = [
+  { title: "Grocery & Food", slug: "grocery", icon: "🌾", bg: "bg-[#F3F8EC] border-[#E2EED3]", description: "Rice, Oil, Spices & Daily Cooking Essentials" },
+  { title: "Clothing & Fashion", slug: "fashion", icon: "👕", bg: "bg-[#FFF5EC] border-[#FFE4D1]", description: "Men, Women & Kids Clothing" },
+  { title: "Cosmetics", slug: "cosmetics", icon: "🧴", bg: "bg-[#FFF0F3] border-[#FFDBE2]", description: "Makeup, Skincare & Lipsticks" },
+  { title: "Beauty Care", slug: "beauty", icon: "🪷", bg: "bg-[#F3EEFF] border-[#E4D7FF]", description: "Herbal & Personal Care Products" },
+  { title: "Health & Medicine", slug: "health", icon: "💊", bg: "bg-[#EBF7F8] border-[#D0F0F3]", description: "Monitors, Supplements & First Aid" },
+  { title: "Electronics", slug: "electronics", icon: "📺", bg: "bg-[#EBF3FF] border-[#D1E2FF]", description: "Gadgets, Earbuds & Smart Devices" },
+  { title: "Home & Kitchen", slug: "kitchen", icon: "🍳", bg: "bg-[#FFF9EC] border-[#FFEEC8]", description: "Cookware, Pans & Home Utilities" },
+];
 
-export default async function CategoriesPage() {
-  await dbConnect();
-
-  const defaultCategories = [
-    { name: "Grocery & Daily Essentials", slug: "grocery-daily-essentials", icon: "🛒" },
-    { name: "Beauty & Cosmetics", slug: "beauty-cosmetics", icon: "💄" },
-    { name: "Home & Kitchen", slug: "home-kitchen", icon: "🍳" },
-    { name: "Fashion & Accessories", slug: "fashion-accessories", icon: "👕" },
-    { name: "Health & Personal Care", slug: "health-personal-care", icon: "🩺" },
-    { name: "Baby Care", slug: "baby-care", icon: "🍼" },
-    { name: "Electronics & Gadgets", slug: "electronics-gadgets", icon: "🎧" },
-    { name: "Dietary Suppliment", slug: "dietary-suppliment", icon: "💊" },
-    { name: "Gifts & Package", slug: "gifts-package", icon: "🎁" },
-    { name: "Beauty Service", slug: "beauty-service", icon: "✨" },
-  ];
-
-  let dbCategories = [];
-  try {
-    dbCategories = await Category.find({ isActive: { $ne: false } }).lean();
-  } catch (err) {
-    console.error("Error loading categories:", err);
-  }
-
-  const categoryList = dbCategories.length > 0 ? dbCategories : defaultCategories;
-
-  const categoryWithCounts = await Promise.all(
-    categoryList.map(async (cat) => {
-      const count = await Product.countDocuments({
-        $or: [{ category: cat.slug }, { category: cat._id }],
-        isActive: { $ne: false },
-      }).catch(() => 0);
-
-      return {
-        ...cat,
-        productCount: count,
-      };
-    })
-  );
-
+export default function CategoriesPage() {
   return (
-    <main className="min-h-screen bg-gray-50/50 text-gray-800 font-sans pb-16">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-10">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-gray-800 flex flex-col justify-between">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 w-full space-y-8">
         
-        {/* Breadcrumb Navigation */}
-        <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-          <Link href="/" className="hover:text-emerald-600 transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <span className="text-gray-900 font-medium">Categories</span>
-        </nav>
-
-        {/* Hero Section Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white p-8 sm:p-12 shadow-lg">
-          <div className="relative z-10 max-w-2xl space-y-3">
-            <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold uppercase tracking-wider text-emerald-100">
-              Explore Our Store
+        {/* Header */}
+        <div className="border-b border-gray-200 pb-4 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-black text-[#00875A] uppercase tracking-widest block">
+              EXPLORE STORE
             </span>
-            <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-              All Categories & Packages
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+              All Categories
             </h1>
-            <p className="text-sm sm:text-base text-emerald-100 leading-relaxed">
-              Find everything from daily groceries, family ration packages, cosmetics to electronics in one place.
-            </p>
           </div>
+          <Link
+            href="/shop"
+            className="text-xs font-bold text-[#00875A] hover:underline"
+          >
+            Show All Products →
+          </Link>
         </div>
 
-        {/* Category Filter & Interactive Grid */}
-        <CategoryFilter categories={JSON.parse(JSON.stringify(categoryWithCounts))} />
+        {/* Categories Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {ALL_CATEGORIES_DATA.map((cat) => (
+            <Link
+              key={cat.slug}
+              href={`/shop?category=${cat.slug}`}
+              className={`${cat.bg} border rounded-3xl p-6 shadow-2xs hover:shadow-md hover:-translate-y-1 transition-all flex flex-col justify-between group cursor-pointer`}
+            >
+              <div className="space-y-3">
+                <div className="text-5xl group-hover:scale-110 transition-transform">
+                  {cat.icon}
+                </div>
+                <h3 className="font-extrabold text-base text-gray-900 group-hover:text-[#00875A] transition-colors">
+                  {cat.title}
+                </h3>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  {cat.description}
+                </p>
+              </div>
 
-      </div>
+              <div className="pt-4 mt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#00875A]">
+                <span>Browse Category</span>
+                <span>→</span>
+              </div>
+            </Link>
+          ))}
+        </div>
 
-    </main>
+      </main>
+      <Footer />
+    </div>
   );
 }

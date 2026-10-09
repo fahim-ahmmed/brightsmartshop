@@ -63,7 +63,6 @@ export default function ClientDashboardPage() {
 
   const totalProducts = categoryStats.reduce((sum, item) => sum + item.count, 0);
 
-  // 8 Soft Pastel Cards (Exact style matching Screenshot 59)
   const statsCards = [
     { 
       label: "Total orders", 
@@ -166,7 +165,7 @@ export default function ClientDashboardPage() {
               <div className="text-left leading-tight">
                 <div className="text-sm font-bold text-gray-900">{user.name}</div>
                 <div className="text-[11px] text-gray-500 font-medium">
-                  {stats.designation || `Level ${stats.currentLevel}`} • ID: <span className="font-bold text-gray-700">{user.id}</span>
+                  {stats.designation || `Level ${stats.currentLevel}`} - ID: <span className="font-bold text-gray-700">{user.id}</span>
                 </div>
               </div>
             </div>
@@ -184,7 +183,7 @@ export default function ClientDashboardPage() {
             </span>
           </div>
           <p className="text-xs text-gray-300 leading-relaxed">
-            আপনার কেনার পর ওয়েবসাইট থেকে নতুন <span className="text-emerald-400 font-black text-sm">{stats.newPurchasersAfterMe} জন</span> ক্রেতা কেনাকাটা করেছেন।
+            আপনার কেনার পর ওয়েবসাইট থেকে নতুন <span className="text-emerald-400 font-black text-sm">{stats.newPurchasersAfterMe} জন</span> ক্রেতা কেনাকাটা করেছেন।
           </p>
           <div className="w-full h-3 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
             <div
@@ -196,7 +195,7 @@ export default function ClientDashboardPage() {
           </div>
         </div>
 
-        {/* 8 Soft Pastel Cards Grid (Exact matching Screenshot 59) */}
+        {/* 8 Soft Pastel Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {statsCards.map((card, idx) => (
             <div
@@ -225,7 +224,7 @@ export default function ClientDashboardPage() {
           ))}
         </div>
 
-        {/* Live Inventory Mix (Pie Chart) & Category Performance Grid */}
+        {/* Live Inventory Mix & Category Performance Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left Box: Pie Chart & Category List */}
@@ -305,8 +304,6 @@ export default function ClientDashboardPage() {
           </div>
 
         </div>
-
-        {/* ---------------- NEWLY ADDED SECTIONS BELOW ---------------- */}
 
         {/* Shortcuts, Recent Orders & Sponsor Network Row */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
