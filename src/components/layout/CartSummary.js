@@ -1,10 +1,12 @@
 'use client';
 
 import { useCart } from '@/features/cart/use-cart';
+import { useCartUI } from '@/features/cart/CartUIProvider';
 
 // Navbar-এর কার্ট বাটন: চাপলে Cart drawer খোলে
 export default function CartSummary() {
-  const { cartItems, cartTotal, openCart } = useCart();
+  const { cartItems, cartTotal } = useCart();
+  const { openCart } = useCartUI();
   const count = cartItems.reduce((total, item) => total + (item.quantity || 1), 0);
 
   return (
