@@ -16,11 +16,12 @@ export default function DashboardSidebar() {
       if (authClient?.signOut) {
         await authClient.signOut();
       }
-      router.push("/login");
+      router.replace("/");
       router.refresh();
     } catch (error) {
       console.error("Logout failed:", error);
-      router.push("/login");
+      router.replace("/");
+      router.refresh();
     }
   };
 

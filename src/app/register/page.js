@@ -59,8 +59,8 @@ export default function RegisterPage() {
         throw new Error(authError.message || "Registration failed. Please try again.");
       }
 
-      // Registration successful -> Navigate to Dashboard
-      router.push("/dashboard");
+      // Registration successful -> Navigate to Home
+      router.replace("/");
       router.refresh();
     } catch (err) {
       setError(err.message || "Something went wrong during registration.");
