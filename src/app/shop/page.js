@@ -1,68 +1,100 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { dbConnect } from "@/lib/db";
-import Product from "@/models/Product";
-import Category from "@/models/Category";
-import ShopListing from "@/features/shop/components/ShopListing";
+import { useCart } from "@/context/CartContext";
 
-export const metadata = {
-  title: "Shop | Bright Smart Shop",
-  description: "Explore all products, grocery packages, and daily essentials with custom filtering at Bright Smart Shop.",
-};
+export default function ShopPage() {
+  const { addToCart } = useCart();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function ShopPage({ searchParams }) {
-  await dbConnect();
-  const params = await searchParams;
+  useEffect(() => {
+    async function loadPermanentProducts() {
+      try {
+        const res = await fetch("/api/admin/products");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.products && json.products.length > 0) {
+            setProducts(json.products);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load products from database:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPermanentProducts();
+  }, []);
 
-  const search = params?.search || "";
-  const category = params?.category || "all";
-  const minPrice = params?.minPrice ? Number(params.minPrice) : 0;
-  const maxPrice = params?.maxPrice ? Number(params.maxPrice) : Infinity;
-  const featured = params?.featured === "true";
-
-  // Build MongoDB Query
-  const query = { isActive: { $ne: false } };
-
-  if (search) {
-    query.name = { $regex: search, $options: "i" };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-xs font-bold text-gray-600">
+        Loading Permanent Products Catalog...
+      </div>
+    );
   }
-
-  if (category && category !== "all") {
-    query.category = category;
-  }
-
-  if (minPrice > 0 || maxPrice < Infinity) {
-    query.price = {};
-    if (minPrice > 0) query.price.$gte = minPrice;
-    if (maxPrice < Infinity) query.price.$lte = maxPrice;
-  }
-
-  if (featured) {
-    query.isFeatured = true;
-  }
-
-  // Fetch Products & Categories
-  const [rawProducts, rawCategories] = await Promise.all([
-    Product.find(query).sort({ createdAt: -1 }).lean(),
-    Category.find({ isActive: { $ne: false } }).lean(),
-  ]);
-
-  const products = JSON.parse(JSON.stringify(rawProducts));
-  const categories = JSON.parse(JSON.stringify(rawCategories));
 
   return (
-    <main className="min-h-screen bg-gray-50/50 text-gray-800 font-sans pb-16">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        
-        {/* Title */}
+    <div className="min-h-screen bg-gray-50/60 font-sans p-6 sm:p-10 max-w-[1400px] mx-auto space-y-6">
+      <div className="flex justify-between items-center border-b border-gray-200 pb-4">
         <div>
-          <h1 className="text-xl font-medium text-gray-700">The shop</h1>
+          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block">
+            STORE CATALOG
+          </span>
+          <h1 className="text-2xl font-black text-gray-900">
+            All Permanent Products ({products.length})
+          </h1>
         </div>
-
-        {/* Filter Bar & Product Grid */}
-        <ShopListing products={products} categories={categories} />
-
+        <Link href="/" className="text-xs font-bold text-emerald-600 hover:underline">
+          ← Back to Home
+        </Link>
       </div>
 
-    </main>
+      {/* Product Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {products.map((p) => (
+          <div
+            key={p._id || p.slug}
+            className="bg-white p-5 rounded-3xl border border-gray-100 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+          >
+            <div className="space-y-3">
+              <div className="w-full h-40 bg-gray-50 rounded-2xl flex items-center justify-center text-5xl">
+                {p.image || "📦"}
+              </div>
+              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full uppercase">
+                {p.category}
+              </span>
+              <h3 className="font-extrabold text-sm text-gray-900 leading-snug">
+                {p.title}
+              </h3>
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-between mt-4">
+              <div>
+                <div className="text-lg font-black text-gray-900">৳ {p.price}</div>
+                <div className="text-[10px] text-amber-600 font-bold">
+                  +{p.points || 0} Points
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  addToCart({
+                    id: p._id || p.slug,
+                    title: p.title,
+                    price: p.price,
+                    points: p.points,
+                  })
+                }
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                + Add
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

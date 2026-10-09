@@ -1,24 +1,56 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-// pricePaisa: পয়সায় (৳340 = 34000) | pointsX100: Point ×100 (40 Point = 4000)
-const schema = new mongoose.Schema(
+const ProductSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', index: true },
-    description: { type: String, default: '' },
-    images: { type: [String], default: [] },
-    pricePaisa: { type: Number, required: true, min: 0, validate: Number.isInteger },
-    pointsX100: { type: Number, default: 0, min: 0, validate: Number.isInteger },
-    stock: { type: Number, default: 0, min: 0 },
-    isPackage: { type: Boolean, default: false, index: true }, // "Our Packages"
-    isFeatured: { type: Boolean, default: false, index: true }, // "Featured picks"
-    isActive: { type: Boolean, default: true, index: true },
-    ratingAvg: { type: Number, default: 0 },
-    ratingCount: { type: Number, default: 0 },
+    title: {
+      type: String,
+      required: [true, "Product title is required"],
+      trim: true,
+    },
+    slug: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+    },
+    price: {
+      type: Number,
+      required: [true, "Product price is required"],
+      min: 0,
+    },
+    points: {
+      type: Number,
+      default: 0,
+    },
+    category: {
+      type: String,
+      required: [true, "Category is required"],
+    },
+    description: {
+      type: String,
+      default: "",
+    },
+    image: {
+      type: String,
+      default: "📦",
+    },
+    stock: {
+      type: Number,
+      default: 100,
+    },
+    // Permanent retention flag (চিরস্থায়ী সংরক্ষণের জন্য)
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    isPermanent: {
+      type: Boolean,
+      default: true, // এটি নিশ্চিত করবে প্রোডাক্ট রেকর্ড স্থায়ী থাকবে
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true, // প্রোডাক্ট আপলোডের তারিখ ও সময় স্থায়ীভাবে থাকবে
+  }
 );
-schema.index({ name: 'text' });
 
-export default mongoose.models.Product || mongoose.model('Product', schema);
+export default mongoose.models.Product || mongoose.model("Product", ProductSchema);
