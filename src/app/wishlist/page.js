@@ -7,9 +7,9 @@ import { useCart } from "@/context/CartContext";
 
 export default function WishlistPage() {
   const { addToCart } = useCart();
-  const [activeTab, setActiveTab] = useState("wishlist"); // 'wishlist' | 'request'
+  const [activeTab, setActiveTab] = useState("wishlist");
 
-  // Saved Wishlist Items (Sample Data)
+  // Sample Saved Wishlist Items
   const [wishlistItems, setWishlistItems] = useState([
     {
       id: "wish-1",
@@ -68,7 +68,6 @@ export default function WishlistPage() {
         text: "আপনার পণ্যের আবেদনটি সফলভাবে অ্যাডমিন প্যানেলে পাঠানো হয়েছে! ধন্যবাদ।",
       });
 
-      // Reset Form
       setRequestData({
         productName: "",
         category: "Grocery & Daily Essentials",
@@ -133,7 +132,6 @@ export default function WishlistPage() {
             </p>
           </div>
 
-          {/* Navigation Tabs */}
           <div className="flex bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700/80 w-full sm:w-auto">
             <button
               onClick={() => setActiveTab("wishlist")}
@@ -161,7 +159,7 @@ export default function WishlistPage() {
         {/* Status Message */}
         {message.text && (
           <div
-            className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in ${
+            className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2 ${
               message.type === "success"
                 ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
                 : "bg-rose-50 border border-rose-200 text-rose-800"
@@ -172,9 +170,9 @@ export default function WishlistPage() {
           </div>
         )}
 
-        {/* ---------------- TAB 1: WISHLIST ITEMS ---------------- */}
+        {/* WISHLIST TAB */}
         {activeTab === "wishlist" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6">
             {wishlistItems.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {wishlistItems.map((item) => (
@@ -235,9 +233,6 @@ export default function WishlistPage() {
                 <h3 className="font-extrabold text-base text-gray-900">
                   আপনার উইশলিস্ট খালি!
                 </h3>
-                <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                  পছন্দের প্রোডাক্টগুলো সেভ করে রাখতে শপ ঘুরে প্রোডাক্ট পছন্দ করুন।
-                </p>
                 <div className="pt-2">
                   <Link
                     href="/shop"
@@ -251,9 +246,9 @@ export default function WishlistPage() {
           </div>
         )}
 
-        {/* ---------------- TAB 2: REQUEST PRODUCT FORM ---------------- */}
+        {/* REQUEST PRODUCT TAB */}
         {activeTab === "request" && (
-          <div className="bg-white p-6 sm:p-10 rounded-3xl border border-gray-100 shadow-2xs space-y-6 max-w-2xl mx-auto animate-in fade-in duration-200">
+          <div className="bg-white p-6 sm:p-10 rounded-3xl border border-gray-100 shadow-2xs space-y-6 max-w-2xl mx-auto">
             <div className="border-b border-gray-100 pb-4">
               <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block">
                 CUSTOM DEMAND
@@ -261,9 +256,6 @@ export default function WishlistPage() {
               <h2 className="text-xl font-black text-gray-900">
                 নতুন প্রোডাক্টের আবেদন করুন
               </h2>
-              <p className="text-xs text-gray-500 mt-1">
-                যে প্রোডাক্টটি শপে খুঁজে পাচ্ছেন না, সেটির বিবরণ জমা দিন। আমাদের অ্যাডমিন টিম পর্যালোচনা করে দ্রুত শপে যোগ করবে।
-              </p>
             </div>
 
             <form onSubmit={handleRequestSubmit} className="space-y-4">
@@ -274,7 +266,7 @@ export default function WishlistPage() {
                 <input
                   type="text"
                   required
-                  placeholder="যেমন: Nestle Nido Fortified Milk Powder 1kg"
+                  placeholder="যেমন: Nestle Nido Milk Powder 1kg"
                   value={requestData.productName}
                   onChange={(e) =>
                     setRequestData({ ...requestData, productName: e.target.value })
@@ -344,7 +336,7 @@ export default function WishlistPage() {
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="পণ্যটির সাইজ, ব্র্যান্ড বা অন্য কোনো বিবরণ সংক্ষেপে লিখুন..."
+                  placeholder="পণ্যটির সাইজ, ব্র্যান্ড বা অন্য বিবরণ..."
                   value={requestData.description}
                   onChange={(e) =>
                     setRequestData({ ...requestData, description: e.target.value })
@@ -356,7 +348,7 @@ export default function WishlistPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-xs rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {submitting ? "আবেদন পাঠানো হচ্ছে..." : "আবেদন জমা দিন →"}
               </button>
@@ -366,7 +358,6 @@ export default function WishlistPage() {
 
       </main>
 
-      {/* Footer */}
       <Footer />
 
     </div>
