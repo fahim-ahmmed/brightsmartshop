@@ -7,149 +7,124 @@ import { authClient } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
+  const [role, setRole] = useState("Customer"); // Customer, Admin, Sub-Admin
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
-      // Better Auth Sign-In Integration
-      const { data, error: authError } = await authClient.signIn.email({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      if (authError) {
-        throw new Error(authError.message || "Invalid credentials. Please try again.");
+      if (authClient?.signIn?.email) {
+        await authClient.signIn.email({
+          email,
+          password,
+        });
       }
 
-      // Login successful -> Redirect directly to Home Page
-      router.push("/");
+      if (role === "Admin" || role === "Sub-Admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
       router.refresh();
     } catch (err) {
-      setError(err.message || "Failed to log in. Please check your details.");
+      console.error("Login failed", err);
+      alert("Invalid email or password.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-50/60 font-sans flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white rounded-3xl border border-gray-100 shadow-xl p-6 sm:p-10 space-y-6">
+    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-md bg-[#1E293B] border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         
-        {/* Header Title */}
-        <div className="text-left space-y-1">
-          <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest block">
-            WELCOME BACK
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-            Log in to your account
-          </h1>
-          <p className="text-xs sm:text-sm text-gray-500">
-            Enter your details below to access your Bright Smart Shop portal.
-          </p>
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black text-xl flex items-center justify-center mx-auto shadow-lg">
+            bss
+          </div>
+          <h1 className="text-2xl font-black text-white tracking-tight">Welcome Back</h1>
+          <p className="text-xs text-slate-400">Select your account type to access panel</p>
         </div>
 
-        {/* Error Alert Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm rounded-xl p-3.5 font-medium flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{error}</span>
+        {/* Role Selector Tabs (Customer, Admin, Sub-Admin) */}
+        <div className="grid grid-cols-3 gap-1.5 bg-[#0F172A] p-1.5 rounded-2xl border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setRole("Customer")}
+            className={`py-2 text-xs font-bold rounded-xl transition-all ${
+              role === "Customer" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Customer
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole("Admin")}
+            className={`py-2 text-xs font-bold rounded-xl transition-all ${
+              role === "Admin" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Admin
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole("Sub-Admin")}
+            className={`py-2 text-xs font-bold rounded-xl transition-all ${
+              role === "Sub-Admin" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            Sub-Admin
+          </button>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300">Email Address *</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+              required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300">Password *</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer"
+          >
+            {loading ? "Signing in..." : `Sign In as ${role}`}
+          </button>
+        </form>
+
+        {role === "Customer" && (
+          <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
+            Don't have a customer account?{" "}
+            <Link href="/register" className="text-emerald-400 font-bold hover:underline">
+              Register here
+            </Link>
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* Email Address */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-              EMAIL ADDRESS *
-            </label>
-            <input
-              type="email"
-              name="email"
-              required
-              placeholder="you@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-            />
-          </div>
-
-          {/* Password */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                PASSWORD *
-              </label>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline font-semibold"
-              >
-                Forgot?
-              </Link>
-            </div>
-            <input
-              type="password"
-              name="password"
-              required
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-            />
-          </div>
-
-          {/* Submit Button */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 active:scale-[0.99] text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
-            >
-              {loading ? (
-                <span>Logging in...</span>
-              ) : (
-                <>
-                  <span>Log In</span>
-                  <span>→</span>
-                </>
-              )}
-            </button>
-          </div>
-
-        </form>
-
-        {/* Footer Register Link */}
-        <div className="text-center pt-2 border-t border-gray-100">
-          <p className="text-xs text-gray-500 font-medium">
-            Don't have a client account?{" "}
-            <Link
-              href="/register"
-              className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
-            >
-              Create Account
-            </Link>
-          </p>
-        </div>
-
       </div>
-    </main>
+    </div>
   );
 }

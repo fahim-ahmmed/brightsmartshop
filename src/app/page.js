@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Footer from "@/components/layout/Footer";
 import { useCart } from "@/context/CartContext";
 
 export default function HomePage() {
@@ -11,11 +10,33 @@ export default function HomePage() {
   const cartContext = useCart();
   const addToCart = cartContext?.addToCart || (() => {});
 
+  // Real Products State from MongoDB
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   // 2 Hero Slider Images from public folder
   const heroImages = ["/hero1.jpg", "/hero2.jpg"];
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Auto Slide Change between 2 images (Every 4 Seconds)
+  // Fetch Live Products from MongoDB API
+  useEffect(() => {
+    async function fetchLiveProducts() {
+      try {
+        const res = await fetch("/api/products", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setProducts(data.products || []);
+        }
+      } catch (err) {
+        console.error("Failed to load products on home page:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLiveProducts();
+  }, []);
+
+  // Auto Slide Change between images (Every 4 Seconds)
   useEffect(() => {
     if (heroImages.length === 0) return;
     const timer = setInterval(() => {
@@ -79,54 +100,6 @@ export default function HomePage() {
     },
   ];
 
-  // Popular Products Showcase
-  const popularProducts = [
-    {
-      id: "prod-1",
-      title: "ACI Pure Rice",
-      weight: "5 kg",
-      rating: 4.5,
-      reviews: 120,
-      price: 195,
-      originalPrice: 220,
-      discount: "-12%",
-      image: "🍚",
-    },
-    {
-      id: "prod-2",
-      title: "Fresh Soybean Oil",
-      weight: "1 Litre",
-      rating: 4.4,
-      reviews: 98,
-      price: 175,
-      originalPrice: 190,
-      discount: "-8%",
-      image: "🍾",
-    },
-    {
-      id: "prod-3",
-      title: "Men's Casual Shirt",
-      weight: "Size: M, L, XL",
-      rating: 4.6,
-      reviews: 76,
-      price: 799,
-      originalPrice: 999,
-      discount: "-20%",
-      image: "👔",
-    },
-    {
-      id: "prod-4",
-      title: "Pond's Face Cream",
-      weight: "50 gm",
-      rating: 4.3,
-      reviews: 64,
-      price: 255,
-      originalPrice: 300,
-      discount: "-15%",
-      image: "🧴",
-    },
-  ];
-
   // Feature Badges
   const features = [
     {
@@ -157,7 +130,7 @@ export default function HomePage() {
       name: "Tanvir Ahmed",
       city: "Dhaka",
       rating: 5,
-      text: "Bright Smart Shop থেকে অর্ডার করে খুব দ্রুত ডেলিভারি পেয়েছি। চাল ও তেলের গুণমান চমৎকার!",
+      text: "Bright Smart Shop থেকে অর্ডার করে খুব দ্রুত ডেলিভারি পেয়েছি। চাল ও তেলের গুণমান চমৎকার!",
     },
     {
       name: "Nusrat Jahan",
@@ -169,7 +142,7 @@ export default function HomePage() {
       name: "Rafiqul Islam",
       city: "Sylhet",
       rating: 5,
-      text: "ক্যাশব্যাক রিওয়ার্ড পয়েন্ট সিস্টেমটা খুব চমৎকার। কেনাকাটা করে বোনাস পয়েন্টও পাওয়া যায়!",
+      text: "ক্যাশব্যাক রিওয়ার্ড পয়েন্ট সিস্টেমটা খুব চমৎকার। কেনাকাটা করে বোনাস পয়েন্টও পাওয়া যায়!",
     },
   ];
 
@@ -334,7 +307,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 4. POPULAR PRODUCTS (Catalog populated by Admin Uploads) */}
+        {/* 4. POPULAR PRODUCTS (Catalog populated by Admin MongoDB Uploads) */}
         <section className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-6">
           <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-4">
             <h2 className="text-2xl sm:text-3xl font-black text-[#00875A] tracking-tight">
@@ -349,56 +322,79 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {popularProducts.map((p) => (
-              <div
-                key={p.id}
-                className="bg-white rounded-3xl p-5 border border-gray-100 shadow-2xs hover:shadow-lg transition-all flex flex-col justify-between relative group"
-              >
-                <span className="absolute top-4 right-4 bg-[#00875A] text-white text-[11px] font-black px-2.5 py-0.5 rounded-md shadow-2xs">
-                  {p.discount}
-                </span>
+          {loading ? (
+            <div className="text-center py-12 text-sm font-bold text-[#00875A] animate-pulse">
+              Loading live products from MongoDB...
+            </div>
+          ) : products.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {products.map((p) => (
+                <div
+                  key={p._id || p.id}
+                  className="bg-white rounded-3xl p-5 border border-gray-100 shadow-2xs hover:shadow-lg transition-all flex flex-col justify-between relative group"
+                >
+                  {p.originalPrice > p.price && (
+                    <span className="absolute top-4 right-4 bg-rose-500 text-white text-[11px] font-black px-2.5 py-0.5 rounded-md shadow-2xs z-10">
+                      SAVE ৳{p.originalPrice - p.price}
+                    </span>
+                  )}
 
-                <div className="w-full h-40 bg-gray-50 rounded-2xl flex items-center justify-center text-6xl my-2 group-hover:scale-105 transition-transform">
-                  {p.image}
-                </div>
-
-                <div className="space-y-1 my-2">
-                  <h3 className="font-black text-base text-gray-900 line-clamp-1">
-                    {p.title}
-                  </h3>
-                  <p className="text-xs font-semibold text-gray-400">{p.weight}</p>
-
-                  <div className="flex items-center gap-1 text-xs pt-1">
-                    <span className="text-amber-500 font-bold">★ {p.rating}</span>
-                    <span className="text-gray-400">({p.reviews})</span>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-gray-100 space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-lg font-black text-gray-900">৳ {p.price}</span>
-                    <span className="text-xs text-gray-400 line-through">৳ {p.originalPrice}</span>
+                  <div className="w-full h-48 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden my-2 group-hover:scale-105 transition-transform">
+                    <img
+                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                      alt={p.title}
+                      className="w-full h-full object-cover rounded-2xl"
+                    />
                   </div>
 
-                  <button
-                    onClick={() =>
-                      addToCart({
-                        id: p.id,
-                        title: p.title,
-                        price: p.price,
-                        points: 5.0,
-                      })
-                    }
-                    className="w-full py-2.5 bg-[#00875A] hover:bg-[#00704A] active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <span>🛒 Add to Cart</span>
-                  </button>
-                </div>
+                  <div className="space-y-1 my-2">
+                    <span className="text-[10px] font-bold text-[#00875A] uppercase tracking-wider block">
+                      {p.category}
+                    </span>
+                    <h3 className="font-black text-base text-gray-900 line-clamp-1">
+                      {p.title}
+                    </h3>
+                    {p.description && (
+                      <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                        {p.description}
+                      </p>
+                    )}
+                  </div>
 
-              </div>
-            ))}
-          </div>
+                  <div className="pt-3 border-t border-gray-100 space-y-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-lg font-black text-gray-900">৳ {p.price}</span>
+                      {p.originalPrice && (
+                        <span className="text-xs text-gray-400 line-through">৳ {p.originalPrice}</span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        addToCart({
+                          id: p._id || p.id,
+                          title: p.title,
+                          price: p.price,
+                          image: p.image,
+                          points: 5.0,
+                        })
+                      }
+                      className="w-full py-2.5 bg-[#00875A] hover:bg-[#00704A] active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>🛒 Add to Cart</span>
+                    </button>
+                  </div>
+
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-2xs">
+              <p className="text-xs font-bold text-gray-500">
+                No active products in MongoDB store catalog yet.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* 5. PROMOTIONAL BANNERS SECTION */}
@@ -519,7 +515,6 @@ export default function HomePage() {
 
       </main>
 
-      
     </div>
   );
 }
