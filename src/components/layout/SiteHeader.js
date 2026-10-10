@@ -12,12 +12,21 @@ export default function SiteHeader() {
   // Cart Context values
   const cartContext = useCart();
   const cartItems = cartContext?.cartItems || [];
-  const totalItemsCount = cartContext?.totalItemsCount || 0;
-  const totalAmount = cartContext?.totalAmount || 0;
-  const removeFromCart = cartContext?.removeFromCart || (() => {});
+  const isCartOpen = cartContext?.isCartOpen || false;
+  const setIsCartOpen = cartContext?.setIsCartOpen || (() => {});
 
-  // Side Drawer Open/Close State
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  // Calculate total count & amount safely
+  const totalItemsCount = cartItems.reduce(
+    (acc, item) => acc + (item.quantity || 1),
+    0
+  );
+  const totalAmount = cartItems.reduce(
+    (acc, item) => acc + item.price * (item.quantity || 1),
+    0
+  );
+
+  const removeFromCart = cartContext?.removeFromCart || (() => {});
+  const updateQuantity = cartContext?.updateQuantity || (() => {});
 
   // Safe Session Retrieval
   const sessionResult = authClient?.useSession ? authClient.useSession() : {};
@@ -154,6 +163,7 @@ export default function SiteHeader() {
       {/* 4. SIDE DRAWER CART SLIDE-OVER */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden font-sans">
+          {/* Backdrop */}
           <div
             onClick={() => setIsCartOpen(false)}
             className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
@@ -182,34 +192,59 @@ export default function SiteHeader() {
               {/* Cart Items List */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {cartItems.length > 0 ? (
-                  cartItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl border border-gray-100">
-                          {item.image || "📦"}
-                        </div>
-                        <div>
-                          <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">
-                            {item.title}
-                          </h4>
-                          <span className="text-xs font-bold text-[#00875A]">
-                            ৳ {item.price}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 transition-colors cursor-pointer"
-                        title="Remove Item"
+                  cartItems.map((item, idx) => {
+                    const itemId = item.id || item._id;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3"
                       >
-                        🗑️
-                      </button>
-                    </div>
-                  ))
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <img
+                            src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"}
+                            alt={item.title}
+                            className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">
+                              {item.title}
+                            </h4>
+                            <span className="text-xs font-bold text-[#00875A] block">
+                              ৳ {item.price}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quantity Controls */}
+                        <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-gray-200">
+                          <button
+                            onClick={() => updateQuantity(itemId, -1)}
+                            className="text-xs font-black text-gray-600 px-1 hover:text-[#00875A] cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-black text-gray-900">
+                            {item.quantity || 1}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(itemId, 1)}
+                            className="text-xs font-black text-gray-600 px-1 hover:text-[#00875A] cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {/* Remove Item Button */}
+                        <button
+                          onClick={() => removeFromCart(itemId)}
+                          className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 transition-colors cursor-pointer"
+                          title="Remove Item"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="text-center py-20 space-y-3">
                     <div className="text-5xl">🛍️</div>

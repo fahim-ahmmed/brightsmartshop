@@ -4,6 +4,7 @@ import "./globals.css";
 import { usePathname } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import Footer from "@/components/layout/Footer";
+import { CartProvider } from "@/context/CartContext";
 
 export default function RootLayout({ children }) {
   const pathname = usePathname();
@@ -13,9 +14,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="antialiased bg-[#0F172A] text-slate-100 font-sans">
-        {!isAdminPage && <SiteHeader />}
-        <main>{children}</main>
-        {!isAdminPage && <Footer />}
+        <CartProvider>
+          {!isAdminPage && <SiteHeader />}
+          <main>{children}</main>
+          {!isAdminPage && <Footer />}
+        </CartProvider>
       </body>
     </html>
   );

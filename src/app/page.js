@@ -45,6 +45,27 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, [heroImages.length]);
 
+  // Handle Pure Add to Cart Action (No Redirects)
+  const handleAddToCartOnly = (product) => {
+    addToCart({
+      id: product._id || product.id,
+      title: product.title,
+      price: product.price,
+      image: product.image,
+    });
+  };
+
+  // Direct Buy Now Action
+  const handleBuyNow = (product) => {
+    // Pass minimal query parameters to prevent URL overflow
+    const params = new URLSearchParams({
+      id: product._id || product.id || "",
+      title: product.title || "",
+      price: product.price || 0,
+    });
+    router.push(`/checkout?${params.toString()}`);
+  };
+
   // Sticky Green Category Navigation Items
   const navCategories = [
     { title: "Home", icon: "🏠", href: "/" },
@@ -327,61 +348,61 @@ export default function HomePage() {
               Loading live products from MongoDB...
             </div>
           ) : products.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
               {products.map((p) => (
                 <div
                   key={p._id || p.id}
-                  className="bg-white rounded-3xl p-5 border border-gray-100 shadow-2xs hover:shadow-lg transition-all flex flex-col justify-between relative group"
+                  className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
                 >
                   {p.originalPrice > p.price && (
-                    <span className="absolute top-4 right-4 bg-rose-500 text-white text-[11px] font-black px-2.5 py-0.5 rounded-md shadow-2xs z-10">
+                    <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10">
                       SAVE ৳{p.originalPrice - p.price}
                     </span>
                   )}
 
-                  <div className="w-full h-48 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden my-2 group-hover:scale-105 transition-transform">
+                  {/* Image */}
+                  <div className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/80 transition-colors">
                     <img
                       src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
                       alt={p.title}
-                      className="w-full h-full object-cover rounded-2xl"
+                      className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
 
-                  <div className="space-y-1 my-2">
-                    <span className="text-[10px] font-bold text-[#00875A] uppercase tracking-wider block">
-                      {p.category}
+                  {/* Title & Category */}
+                  <div className="space-y-1 mb-3">
+                    <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                      {p.category || "General"}
                     </span>
-                    <h3 className="font-black text-base text-gray-900 line-clamp-1">
+                    <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
                       {p.title}
                     </h3>
-                    {p.description && (
-                      <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                        {p.description}
-                      </p>
+                  </div>
+
+                  {/* Price */}
+                  <div className="pt-2 border-t border-gray-100 mb-3 flex items-baseline gap-2">
+                    <span className="text-base font-black text-gray-900">৳{p.price}</span>
+                    {p.originalPrice > p.price && (
+                      <span className="text-[11px] text-gray-400 line-through font-bold">৳{p.originalPrice}</span>
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-gray-100 space-y-2">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg font-black text-gray-900">৳ {p.price}</span>
-                      {p.originalPrice && (
-                        <span className="text-xs text-gray-400 line-through">৳ {p.originalPrice}</span>
-                      )}
-                    </div>
+                  {/* Buy Now & Cart Buttons */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAddToCartOnly(p)}
+                      className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                    >
+                      🛒 Cart
+                    </button>
 
                     <button
-                      onClick={() =>
-                        addToCart({
-                          id: p._id || p.id,
-                          title: p.title,
-                          price: p.price,
-                          image: p.image,
-                          points: 5.0,
-                        })
-                      }
-                      className="w-full py-2.5 bg-[#00875A] hover:bg-[#00704A] active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      type="button"
+                      onClick={() => handleBuyNow(p)}
+                      className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
                     >
-                      <span>🛒 Add to Cart</span>
+                      ⚡ Buy Now
                     </button>
                   </div>
 
