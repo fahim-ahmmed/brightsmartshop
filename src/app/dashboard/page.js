@@ -71,13 +71,7 @@ export default function ClientDashboardPage() {
       icon: "📍", 
       bg: "bg-[#EBF5FF] text-sky-900 border-[#D6E8FF]" 
     },
-    { 
-      label: "Pending Point", 
-      value: "0.00", 
-      subtext: "60 points monthly target", 
-      icon: "✦", 
-      bg: "bg-[#FFF0E6] text-orange-900 border-[#FFE1D1]" 
-    },
+    
     { 
       label: "Total Package", 
       value: stats.totalOrders.toString(), 
@@ -99,13 +93,7 @@ export default function ClientDashboardPage() {
       icon: "✦", 
       bg: "bg-[#FFFBE6] text-amber-900 border-[#FFF5C2]" 
     },
-    { 
-      label: "Package points", 
-      value: "0.00", 
-      subtext: "0.0 points per package", 
-      icon: "•", 
-      bg: "bg-[#FFF0E6] text-orange-900 border-[#FFE1D1]" 
-    },
+     
     { 
       label: "Wallet balance", 
       value: `৳ ${stats.walletBalance.toFixed(2)}`, 

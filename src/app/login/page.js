@@ -2,127 +2,122 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [role, setRole] = useState("Customer"); // Customer, Admin, Sub-Admin
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({
+    identifier: "", // মোবাইল নম্বর বা ইমেইল
+    password: "",
+  });
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg("");
+
+    const inputVal = formData.identifier.trim();
+    
+    // যদি ইনপুট মোবাইল নম্বর হয়, তবে ভার্চুয়াল ইমেইল ফরম্যাট করবে; আর যদি ইমেইল হয় তবে সেটাই রাখবে
+    const isEmail = inputVal.includes("@");
+    const targetEmail = isEmail ? inputVal.toLowerCase() : `${inputVal}@brightsmartshop.local`;
 
     try {
-      if (authClient?.signIn?.email) {
-        await authClient.signIn.email({
-          email,
-          password,
-        });
-      }
+      const { data, error } = await authClient.signIn.email({
+        email: targetEmail,
+        password: formData.password,
+      });
 
-      if (role === "Admin" || role === "Sub-Admin") {
-        router.push("/admin");
+      if (error) {
+        setErrorMsg("⚠️ মোবাইল নম্বর/ইমেইল অথবা পাসওয়ার্ড সঠিক নয়!");
+        setLoading(false);
       } else {
-        router.push("/dashboard");
+        if (data?.user) {
+          localStorage.setItem("bright_user", JSON.stringify(data.user));
+        }
+        window.location.href = "/";
       }
-      router.refresh();
     } catch (err) {
-      console.error("Login failed", err);
-      alert("Invalid email or password.");
-    } finally {
+      console.error("Login error:", err);
+      setErrorMsg("সার্ভারে সমস্যা হয়েছে, আবার চেষ্টা করুন।");
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-4 font-sans">
-      <div className="w-full max-w-md bg-[#1E293B] border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-gray-800">
+      <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-gray-200/80 shadow-2xl space-y-6">
         
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black text-xl flex items-center justify-center mx-auto shadow-lg">
-            bss
+          <Link href="/" className="inline-flex items-center gap-2">
+            <div className="w-10 h-10 rounded-2xl bg-[#00875A] text-white font-black flex items-center justify-center text-sm shadow-md">
+              bss
+            </div>
+            <span className="font-serif font-black text-2xl text-[#00875A]">
+              Bright Smart Shop
+            </span>
+          </Link>
+          <h1 className="text-xl font-black text-gray-900 pt-2">
+            লগইন করুন
+          </h1>
+          <p className="text-xs text-gray-500">
+            আপনার মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে অ্যাকাউন্টে প্রবেশ করুন
+          </p>
+        </div>
+
+        {errorMsg && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold p-3.5 rounded-2xl text-center shadow-2xs">
+            {errorMsg}
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Welcome Back</h1>
-          <p className="text-xs text-slate-400">Select your account type to access panel</p>
-        </div>
+        )}
 
-        {/* Role Selector Tabs (Customer, Admin, Sub-Admin) */}
-        <div className="grid grid-cols-3 gap-1.5 bg-[#0F172A] p-1.5 rounded-2xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => setRole("Customer")}
-            className={`py-2 text-xs font-bold rounded-xl transition-all ${
-              role === "Customer" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            Customer
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole("Admin")}
-            className={`py-2 text-xs font-bold rounded-xl transition-all ${
-              role === "Admin" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            Admin
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole("Sub-Admin")}
-            className={`py-2 text-xs font-bold rounded-xl transition-all ${
-              role === "Sub-Admin" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            Sub-Admin
-          </button>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">Email Address *</label>
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div>
+            <label className="font-bold text-gray-700 block mb-1">
+              মোবাইল নম্বর / ইমেইল *
+            </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+              type="text"
               required
+              value={formData.identifier}
+              onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
+              placeholder="017XXXXXXXX"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-[#00875A] font-medium"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">Password *</label>
+          <div>
+            <label className="font-bold text-gray-700 block mb-1">
+              পাসওয়ার্ড *
+            </label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500"
               required
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="••••••••"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-[#00875A] font-medium"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer"
+            className="w-full py-3.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer mt-2"
           >
-            {loading ? "Signing in..." : `Sign In as ${role}`}
+            {loading ? "প্রসেস হচ্ছে..." : "লগইন করুন"}
           </button>
         </form>
 
-        {role === "Customer" && (
-          <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
-            Don't have a customer account?{" "}
-            <Link href="/register" className="text-emerald-400 font-bold hover:underline">
-              Register here
+        <div className="border-t border-gray-100 pt-4 text-center space-y-2 text-xs">
+          <p className="text-gray-500 font-medium">
+            অ্যাকাউন্ট নেই?{" "}
+            <Link href="/register" className="font-black text-[#F25C05] hover:underline">
+              নতুন অ্যাকাউন্ট তৈরি করুন
             </Link>
-          </div>
-        )}
+          </p>
+        </div>
 
       </div>
     </div>

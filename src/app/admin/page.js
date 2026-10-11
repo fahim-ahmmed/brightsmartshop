@@ -2,8 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
+
+  // Better Auth Live Session Check
+  const { data: session, isPending: isAuthPending } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null, isPending: false };
+
+  const [authorized, setAuthorized] = useState(false);
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalOrders: 0,
@@ -15,10 +25,38 @@ export default function AdminDashboardPage() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 🟢 Security Verification & Role Protection
   useEffect(() => {
+    if (!isAuthPending) {
+      // LocalStorage Fallback (যদি সেশন পেতে বিলম্ব হয়)
+      const localUserRaw = typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
+      const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
+      const currentUser = session?.user || localUser;
+
+      if (!currentUser) {
+        // লগইন না থাকলে সরাসরি লগইন পেজে পাঠাবে
+        router.push("/login?callbackUrl=/admin");
+        return;
+      }
+
+      if (currentUser.role !== "admin") {
+        // এডমিন না হলে অনুমতি বাতিল করে হোমপেজে পাঠাবে
+        alert("⚠️ আপনার অ্যাডমিন প্যানেলে প্রবেশের অনুমতি নেই!");
+        router.push("/");
+        return;
+      }
+
+      setAuthorized(true);
+    }
+  }, [session, isAuthPending, router]);
+
+  // Fetch Admin Stats from Backend
+  useEffect(() => {
+    if (!authorized) return;
+
     async function fetchDashboardData() {
       try {
-        const res = await fetch("/api/admin/stats");
+        const res = await fetch("/api/admin/stats", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           setStats(data.stats || stats);
@@ -30,9 +68,20 @@ export default function AdminDashboardPage() {
         setLoading(false);
       }
     }
-    fetchDashboardData();
-  }, []);
 
+    fetchDashboardData();
+  }, [authorized]);
+
+  // Security Verification Loading Screen
+  if (isAuthPending || !authorized) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-xs font-black text-emerald-400 animate-pulse">
+        🔒 সিকিউরিটি ভেরিফিকেশন ও অ্যাডমিন রোল চেক করা হচ্ছে...
+      </div>
+    );
+  }
+
+  // Data Fetching Loading Screen
   if (loading) {
     return (
       <div className="p-8 text-center text-xs font-bold text-[#00875A] animate-pulse">
@@ -51,7 +100,9 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-8 font-sans text-gray-100">
+      
+      {/* Top Banner Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#1E293B] p-6 rounded-3xl border border-slate-800 shadow-xl">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight">Admin Overview</h1>
@@ -59,9 +110,11 @@ export default function AdminDashboardPage() {
             Real-time platform metrics synchronized with live database.
           </p>
         </div>
-        <span className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black rounded-xl">
-          Live Database Sync ●
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black rounded-xl">
+            Live Database Sync ●
+          </span>
+        </div>
       </div>
 
       {/* Stats Cards Grid */}
@@ -126,6 +179,7 @@ export default function AdminDashboardPage() {
           </p>
         )}
       </div>
+
     </div>
   );
 }

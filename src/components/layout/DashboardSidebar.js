@@ -16,17 +16,19 @@ export default function DashboardSidebar() {
       if (authClient?.signOut) {
         await authClient.signOut();
       }
+      localStorage.removeItem("bright_user");
       router.replace("/");
       router.refresh();
     } catch (error) {
       console.error("Logout failed:", error);
+      localStorage.removeItem("bright_user");
       router.replace("/");
       router.refresh();
     }
   };
 
   const menuItems = [
-    { label: "Dashboard", href: "/dashboard", icon: "📊" },
+    { label: "Dashboard", href: "/client/dashboard", icon: "📊" },
     { label: "My Levels", href: "/levels", icon: "👑" },
     { label: "My Account", href: "/client/account", icon: "👤" },
     { label: "Shop History", href: "/client/orders", icon: "🛍️" },
@@ -41,10 +43,12 @@ export default function DashboardSidebar() {
       
       {/* 1. Mobile Top Header Navigation */}
       <div className="lg:hidden w-full bg-slate-950 text-white p-4 flex items-center justify-between sticky top-0 z-50 border-b border-slate-800 shadow-md">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black flex items-center justify-center text-xs shadow-md">
-            bss
-          </div>
+        <Link href="/" className="flex items-center gap-2.5">
+          <img
+            src="/logo.jpg"
+            alt="Bright Smart Shop Logo"
+            className="w-8 h-8 rounded-xl object-cover shadow-sm border border-emerald-500/30"
+          />
           <div>
             <span className="font-serif font-bold text-sm tracking-tight block text-white">
               Bright Smart Shop
@@ -53,14 +57,14 @@ export default function DashboardSidebar() {
               DASHBOARD OVERVIEW
             </span>
           </div>
-        </div>
+        </Link>
 
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
         >
-          <span>Other pages</span>
+          <span>Menu</span>
           <span className="text-[10px]">{isMobileMenuOpen ? "▲" : "▼"}</span>
         </button>
       </div>
@@ -112,11 +116,13 @@ export default function DashboardSidebar() {
       <aside className="hidden lg:flex w-64 bg-slate-950 text-slate-300 flex-col sticky top-0 h-screen border-r border-slate-800/80 justify-between">
         
         <div>
-          {/* Header */}
-          <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black text-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              bss
-            </div>
+          {/* Header & Logo */}
+          <Link href="/" className="p-6 border-b border-slate-800/80 flex items-center gap-3 group">
+            <img
+              src="/logo.jpg"
+              alt="Bright Smart Shop Logo"
+              className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-emerald-500/10 border border-emerald-500/30 group-hover:scale-105 transition-transform"
+            />
             <div className="leading-tight">
               <span className="font-serif font-extrabold text-white text-base tracking-tight block">
                 Bright Smart Shop
@@ -125,7 +131,7 @@ export default function DashboardSidebar() {
                 CLIENT PORTAL
               </span>
             </div>
-          </div>
+          </Link>
 
           {/* Navigation Links */}
           <nav className="px-4 py-6 space-y-1.5 font-medium text-xs">

@@ -7,12 +7,22 @@ import { sendEmail } from './email';
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
+  
+  trustedOrigins: [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+  ],
+
   database: mongodbAdapter(db),
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    autoSignIn: true, // রেজিস্টারের পরপরই লগইন
+    autoSignIn: true,
     resetPasswordTokenExpiresIn: 60 * 60,
     sendResetPassword: async ({ user, url }) => {
       await sendEmail({
@@ -26,9 +36,9 @@ export const auth = betterAuth({
     additionalFields: {
       mobile: { type: 'string', required: true },
       address: { type: 'string', required: true },
-      // input:false = ইউজার নিজে role বদলাতে পারবে না
+      sponsorId: { type: 'string', required: false },
       role: { type: 'string', required: false, defaultValue: 'user', input: false },
     },
   },
-  plugins: [nextCookies()], // সবসময় শেষে থাকবে
+  plugins: [nextCookies()],
 });

@@ -1,23 +1,27 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient } from "mongodb";
 
-// Better Auth নিজস্ব native driver সংযোগ ব্যবহার করে (ডেটা Mongoose-এর মডেল থেকে আলাদা)।
-// URI না থাকলেও import ভাঙবে না, যাতে build চলে।
-const client =
-  globalThis._authMongoClient ||
-  (globalThis._authMongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017'));
+const uri = process.env.MONGODB_URI;
+const options = {};
 
-export const db = client.db();
-
-export const getUserCollection = () => db.collection('user');
-
-let indexPromise;
-export function ensureUserIndexes() {
-  // মোবাইল নম্বর ইউনিক; একবারই চলে
-  indexPromise ||= getUserCollection()
-    .createIndex({ mobile: 1 }, { unique: true, partialFilterExpression: { mobile: { $type: 'string' } } })
-    .catch((e) => {
-      indexPromise = null;
-      console.error('[auth] index error:', e.message);
-    });
-  return indexPromise;
+if (!process.env.MONGODB_URI) {
+  throw new Error("Please add your Mongo URI to .env.local");
 }
+
+let client;
+let clientPromise;
+
+if (process.env.NODE_ENV === "development") {
+  if (!global._mongoClientPromise) {
+    client = new MongoClient(uri, options);
+    global._mongoClientPromise = client.connect();
+  }
+  clientPromise = global._mongoClientPromise;
+} else {
+  client = new MongoClient(uri, options);
+  clientPromise = client.connect();
+}
+
+// 🟢 DB এক্সপোর্ট নিশ্চিত করুন
+const clientAdapter = await clientPromise;
+export const db = clientAdapter.db(); // ডাটাবেজ অবজেক্ট
+export default clientPromise;

@@ -74,7 +74,7 @@ export default function LevelsPage() {
               <thead>
                 <tr className="bg-slate-950 text-slate-300 uppercase font-black tracking-wider text-[11px] border-b border-slate-700">
                   <th className="py-4 px-6">Level</th>
-                  <th className="py-4 px-6">Package Target</th>
+                   
                   <th className="py-4 px-6">Taka (Cashback)</th>
                   <th className="py-4 px-6">Designation</th>
                 </tr>
@@ -92,7 +92,7 @@ export default function LevelsPage() {
                       }`}
                     >
                       <td className="py-3.5 px-6 font-bold">{row.level}</td>
-                      <td className="py-3.5 px-6 font-mono text-slate-200">{row.package}</td>
+                       
                       <td className="py-3.5 px-6 font-extrabold text-emerald-400">৳ {row.taka}</td>
                       <td className="py-3.5 px-6 font-semibold">
                         {row.designation ? (

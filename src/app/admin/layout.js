@@ -2,12 +2,20 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 🟢 সিকিউরিটি ফিক্স: লগইন পেজে সাইডবার এবং মোবাইল হেডার সম্পূর্ণ হাইড থাকবে
+  if (pathname === "/admin/login") {
+    return (
+      <div className="min-h-screen bg-[#0F172A] text-slate-100 font-sans w-full">
+        {children}
+      </div>
+    );
+  }
 
   const navItems = [
     { label: "Dashboard", href: "/admin", icon: "📊" },
@@ -38,7 +46,7 @@ export default function AdminLayout({ children }) {
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-xl"
+          className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-xl cursor-pointer"
         >
           {isMobileMenuOpen ? "Close ✕" : "Menu ☰"}
         </button>

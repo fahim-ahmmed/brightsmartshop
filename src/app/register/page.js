@@ -2,247 +2,181 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [formData, setFormData] = useState({
+    sponsorId: "",
     name: "",
-    email: "",
     mobile: "",
     address: "",
-    sponsorCode: "",
     password: "",
-    confirmPassword: "",
   });
-
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match!");
-      return;
-    }
-
-    if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters long.");
-      return;
-    }
-
     setLoading(true);
+    setErrorMsg("");
+
+    const cleanMobile = formData.mobile.trim();
+    // মোবাইল নম্বর দিয়ে ইমেইল ফিল্ড অটো জেনারেট
+    const generatedEmail = `${cleanMobile}@brightsmartshop.local`;
 
     try {
-      // Better Auth Sign-Up Integration
-      const { data, error: authError } = await authClient.signUp.email({
-        email: formData.email,
+      const { data, error } = await authClient.signUp.email({
+        email: generatedEmail,
         password: formData.password,
         name: formData.name,
-        // Additional User Data for Better Auth Schema
-        mobile: formData.mobile,
+        mobile: cleanMobile,
         address: formData.address,
-        sponsorCode: formData.sponsorCode,
+        sponsorId: formData.sponsorId,
       });
 
-      if (authError) {
-        throw new Error(authError.message || "Registration failed. Please try again.");
+      if (error) {
+        setErrorMsg(error.message || "এই মোবাইল নম্বর দিয়ে আগেই অ্যাকাউন্ট করা রয়েছে!");
+        setLoading(false);
+      } else {
+        alert("🎉 রেজিস্ট্রেশন সফল হয়েছে!");
+        if (data?.user) {
+          localStorage.setItem("bright_user", JSON.stringify(data.user));
+        }
+        window.location.href = "/";
       }
-
-      // Registration successful -> Navigate to Home
-      router.replace("/");
-      router.refresh();
     } catch (err) {
-      setError(err.message || "Something went wrong during registration.");
-    } finally {
+      console.error("Sign up error:", err);
+      setErrorMsg("সার্ভারে সমস্যা হয়েছে, আবার চেষ্টা করুন।");
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-50/60 font-sans flex items-center justify-center py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-xl w-full bg-white rounded-3xl border border-gray-100 shadow-xl p-6 sm:p-10 space-y-6">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-10 font-sans text-gray-800">
+      <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/80 shadow-2xl space-y-6 relative overflow-hidden">
         
-        {/* Header Title */}
-        <div className="text-left space-y-1">
-          <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest block">
-            JOIN BRIGHT SMART SHOP
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-            Create your client account
+        <div className="text-center space-y-2 relative z-10">
+          <Link href="/" className="inline-flex items-center gap-2 group">
+            <div className="w-12 h-12 rounded-2xl bg-[#00875A] text-white font-black flex items-center justify-center text-base shadow-lg shadow-emerald-700/20 group-hover:scale-105 transition-transform">
+              bss
+            </div>
+            <span className="font-serif font-black text-2xl text-[#00875A] tracking-tight">
+              Bright Smart Shop
+            </span>
+          </Link>
+          <h1 className="text-xl sm:text-2xl font-black text-gray-900 pt-2 tracking-tight">
+            নতুন অ্যাকাউন্ট তৈরি করুন
           </h1>
-          <p className="text-xs sm:text-sm text-gray-500">
-            Register in a few seconds and start shopping with more value.
+          <p className="text-xs text-gray-500 font-medium">
+            স্পন্সর আইডি ও আপনার সঠিক তথ্য দিয়ে রেজিস্ট্রেশন সম্পন্ন করুন
           </p>
         </div>
 
-        {/* Error Alert Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm rounded-xl p-3.5 font-medium flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{error}</span>
+        {errorMsg && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold p-3.5 rounded-2xl text-center shadow-2xs">
+            ⚠️ {errorMsg}
           </div>
         )}
 
-        {/* Registration Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* Row 1: Name & Required Email */}
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs relative z-10">
+         
+
+          {/* Name & Mobile */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                NAME *
+            <div>
+              <label className="font-bold text-gray-700 block mb-1">
+                আপনার পূর্ণ নাম *
               </label>
               <input
                 type="text"
-                name="name"
                 required
-                placeholder="Enter your full name"
                 value={formData.name}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="আপনার নাম লিখুন"
+                className="w-full bg-gray-50/80 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-[#00875A]"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                EMAIL ADDRESS *
+            <div>
+              <label className="font-bold text-gray-700 block mb-1">
+                মোবাইল নম্বর *
               </label>
               <input
-                type="email"
-                name="email"
+                type="tel"
                 required
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                value={formData.mobile}
+                onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                placeholder="017XXXXXXXX"
+                className="w-full bg-gray-50/80 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-[#00875A]"
               />
             </div>
           </div>
 
-          {/* Row 2: Optional Mobile */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-              MOBILE <span className="text-gray-400 font-normal lowercase">(optional)</span>
-            </label>
-            <input
-              type="tel"
-              name="mobile"
-              placeholder="Enter your phone number"
-              value={formData.mobile}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-            />
-          </div>
+          {/* Password & Address */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="font-bold text-gray-700 block mb-1">
+                পাসওয়ার্ড *
+              </label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="•••••••• (সর্বনিম্ন ৮ অক্ষর)"
+                className="w-full bg-gray-50/80 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-[#00875A]"
+              />
+            </div>
 
-          {/* Row 3: Address */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-              ADDRESS *
-            </label>
-            <textarea
-              name="address"
-              required
-              rows={2}
-              placeholder="Enter your full address"
-              value={formData.address}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all resize-none"
-            />
-          </div>
-
-          {/* Row 4: Sponsor Code */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-              SPONSOR CODE <span className="text-gray-400 font-normal lowercase">(optional)</span>
+            <div>
+              <label className="font-bold text-gray-700 block mb-1">
+                সম্পূর্ণ ঠিকানা *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                placeholder="বাসা নং, রোড, থানা, জেলা..."
+                className="w-full bg-gray-50/80 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-[#00875A]"
+              />
+            </div>
+             
+          {/* Sponsor ID */}
+          <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl space-y-1">
+            <label className="font-black text-amber-900 block flex items-center gap-1.5 text-xs">
+              <span>🤝 রেফার / স্পন্সর আইডি (Sponsor ID)</span>
             </label>
             <input
               type="text"
-              name="sponsorCode"
-              placeholder="Customer ID or referral code"
-              value={formData.sponsorCode}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+              value={formData.sponsorId}
+              onChange={(e) => setFormData({ ...formData, sponsorId: e.target.value })}
+              placeholder="উদাহরণ: BSS1024 (অপশনাল বা প্রয়োজনীয় আইডি)"
+              className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-gray-900 font-bold focus:outline-none focus:border-[#00875A]"
             />
           </div>
-
-          {/* Row 5: Password & Confirm Password */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                PASSWORD *
-              </label>
-              <input
-                type="password"
-                name="password"
-                required
-                placeholder="At least 8 characters"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                CONFIRM PASSWORD *
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                required
-                placeholder="Re-enter your password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-              />
-            </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 bg-[#009A00] hover:bg-[#008000] active:scale-[0.99] text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
-            >
-              {loading ? (
-                <span>Creating Account...</span>
-              ) : (
-                <>
-                  <span>Create Client Account</span>
-                  <span>→</span>
-                </>
-              )}
-            </button>
-          </div>
-
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 bg-[#F25C05] hover:bg-[#D95000] text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all cursor-pointer mt-3"
+          >
+            {loading ? "প্রসেস হচ্ছে..." : "🚀 রেজিস্টার সম্পূর্ণ করুন"}
+          </button>
         </form>
 
-        {/* Footer Login Link */}
-        <div className="text-center pt-2 border-t border-gray-100">
-          <p className="text-xs text-gray-500 font-medium">
-            Already have an account?{" "}
-            <Link
-              href="/login"
-              className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
-            >
-              Log In
+        <div className="border-t border-gray-100 pt-4 text-center space-y-2 text-xs relative z-10">
+          <p className="text-gray-500 font-medium">
+            অলরেডি অ্যাকাউন্ট আছে?{" "}
+            <Link href="/login" className="font-black text-[#00875A] hover:underline">
+              লগইন করুন
             </Link>
           </p>
         </div>
 
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -9,29 +9,59 @@ import { useCart } from "@/context/CartContext";
 export default function SiteHeader() {
   const router = useRouter();
 
-  // Cart Context values
-  const cartContext = useCart();
-  const cartItems = cartContext?.cartItems || [];
-  const isCartOpen = cartContext?.isCartOpen || false;
-  const setIsCartOpen = cartContext?.setIsCartOpen || (() => {});
+  // Better Auth Live Session Hook
+  const { data: session, isPending } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null, isPending: false };
 
-  // Calculate total count & amount safely
-  const totalItemsCount = cartItems.reduce(
-    (acc, item) => acc + (item.quantity || 1),
-    0
-  );
-  const totalAmount = cartItems.reduce(
-    (acc, item) => acc + item.price * (item.quantity || 1),
-    0
-  );
+  // Fallback LocalStorage State
+  const [localUser, setLocalUser] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
-  const removeFromCart = cartContext?.removeFromCart || (() => {});
-  const updateQuantity = cartContext?.updateQuantity || (() => {});
+  // Sync with LocalStorage if available
+  useEffect(() => {
+    const updateUserFromStorage = () => {
+      const savedUser = localStorage.getItem("bright_user");
+      if (savedUser) {
+        try {
+          setLocalUser(JSON.parse(savedUser));
+        } catch (e) {
+          console.error("User parse error", e);
+        }
+      } else {
+        setLocalUser(null);
+      }
+    };
 
-  // Safe Session Retrieval
-  const sessionResult = authClient?.useSession ? authClient.useSession() : {};
-  const session = sessionResult?.data;
-  const isPending = sessionResult?.isPending;
+    updateUserFromStorage();
+    window.addEventListener("storage", updateUserFromStorage);
+    return () => window.removeEventListener("storage", updateUserFromStorage);
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Priority: Better Auth Session User -> LocalStorage User
+  const currentUser = session?.user || localUser;
+
+  const {
+    cartItems = [],
+    totalItemsCount = 0,
+    totalAmount = 0,
+    removeFromCart = () => {},
+    updateQuantity = () => {},
+    isCartOpen = false,
+    setIsCartOpen = () => {},
+  } = useCart() || {};
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -42,26 +72,41 @@ export default function SiteHeader() {
     }
   };
 
-  const isLoggedIn = !isPending && !!session?.user;
+  const handleLogout = async () => {
+    try {
+      if (authClient?.signOut) {
+        await authClient.signOut();
+      }
+    } catch (e) {
+      console.error("Better Auth logout error:", e);
+    }
+    localStorage.removeItem("bright_user");
+    setLocalUser(null);
+    window.location.href = "/";
+  };
+
+  // Human Default Avatar
+  const defaultHumanAvatar =
+    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
 
   return (
     <>
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-2xs font-sans h-16 sm:h-20">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-3 sm:gap-6">
           
-          {/* 1. Logo & Brand Title */}
+          {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-[#00875A] text-white shadow-md shadow-emerald-700/20 flex items-center justify-center p-1 group-hover:scale-105 transition-transform">
-              <span className="font-black tracking-tighter text-lg sm:text-xl">
-                b<span className="text-[#F25C05]">s</span>s
-              </span>
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="Bright Smart Shop Logo"
+              className="h-10 sm:h-12 w-auto object-contain rounded-xl group-hover:scale-105 transition-transform"
+            />
             <span className="font-serif font-black text-lg sm:text-2xl text-[#00875A] tracking-tight">
               Bright Smart Shop
             </span>
           </Link>
 
-          {/* 2. Desktop Search Bar */}
+          {/* Search Bar */}
           <form 
             onSubmit={handleSearch}
             className="flex-1 max-w-lg mx-2 hidden md:flex items-center bg-gray-50/80 border border-gray-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-[#00875A]/20 focus-within:border-[#00875A] transition-all shadow-2xs"
@@ -86,10 +131,10 @@ export default function SiteHeader() {
             </button>
           </form>
 
-          {/* 3. Right Actions Area (Wishlist, Cart, Login, Register) */}
+          {/* Right Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
             
-            {/* Wishlist Button */}
+            {/* Wishlist */}
             <Link
               href="/wishlist"
               className="relative flex items-center gap-2 px-3 py-2 rounded-2xl bg-rose-50/70 hover:bg-rose-100/80 text-rose-600 border border-rose-100 transition-all group cursor-pointer"
@@ -105,7 +150,7 @@ export default function SiteHeader() {
               </span>
             </Link>
 
-            {/* Cart Trigger Button */}
+            {/* Cart Button */}
             <button
               type="button"
               onClick={() => setIsCartOpen(true)}
@@ -127,16 +172,93 @@ export default function SiteHeader() {
               </div>
             </button>
 
-            {/* Auth Buttons */}
-            <div className="flex items-center gap-2 ml-1">
-              {isLoggedIn ? (
-                <Link
-                  href="/dashboard"
-                  className="px-4 py-2 bg-[#00875A] hover:bg-[#00704A] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>📊</span> 
-                  <span className="hidden sm:inline">Dashboard</span>
-                </Link>
+            {/* 🌟 DASHBOARD BUTTON & USER PROFILE AREA */}
+            <div className="flex items-center gap-2 ml-1" ref={dropdownRef}>
+              {isPending ? (
+                <div className="text-xs font-bold text-[#00875A] animate-pulse px-2">
+                  যাচাই হচ্ছে...
+                </div>
+              ) : currentUser ? (
+                <div className="flex items-center gap-2.5">
+                  
+                  {/* 1. Dashboard Button: সবসময় শুধু /client/dashboard এ যাবে এবং টেক্সট হবে "Dashboard" */}
+                  <Link
+                    href="/client/dashboard"
+                    className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs sm:text-sm rounded-2xl shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>📊</span>
+                    <span>Dashboard</span>
+                  </Link>
+
+                  {/* 2. USER PROFILE AVATAR & NAME DROPDOWN */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="flex items-center gap-2 bg-gray-50 hover:bg-emerald-50/60 border border-gray-200 hover:border-emerald-300 p-1.5 pl-2 pr-2.5 rounded-2xl transition-all cursor-pointer shadow-2xs group"
+                    >
+                      <div className="relative">
+                        <img
+                          src={
+                            currentUser.profileImage ||
+                            currentUser.image ||
+                            defaultHumanAvatar
+                          }
+                          alt={currentUser.name || "User"}
+                          className="w-8 h-8 rounded-xl object-cover border border-emerald-500/30 group-hover:scale-105 transition-transform"
+                        />
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                      </div>
+
+                      <span className="hidden sm:block text-xs font-black text-gray-900 max-w-[110px] truncate">
+                        {currentUser.name}
+                      </span>
+
+                      <svg className={`w-3 h-3 text-gray-400 group-hover:text-[#00875A] transform transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {dropdownOpen && (
+                      <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
+                          <p className="text-xs font-black text-gray-900 truncate">{currentUser.name}</p>
+                          <p className="text-[10px] text-gray-500 font-medium truncate">{currentUser.email || currentUser.mobile}</p>
+                        </div>
+
+                        <Link
+                          href="/client/dashboard"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
+                        >
+                          <span>📊</span>
+                          <span>My Dashboard</span>
+                        </Link>
+
+                        <Link
+                          href="/client/orders"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
+                        >
+                          <span>📋</span>
+                          <span>My Orders</span>
+                        </Link>
+
+                        <div className="border-t border-gray-100 my-1"></div>
+
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-left"
+                        >
+                          <span>🚪</span>
+                          <span>Logout Account</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               ) : (
                 <>
                   <Link
@@ -160,88 +282,40 @@ export default function SiteHeader() {
         </div>
       </header>
 
-      {/* 4. SIDE DRAWER CART SLIDE-OVER */}
+      {/* Side Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden font-sans">
-          {/* Backdrop */}
-          <div
-            onClick={() => setIsCartOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
-          />
-
+          <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
-              
-              {/* Drawer Header */}
               <div className="p-6 bg-[#00875A] text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">🛒</span>
                   <h2 className="text-lg font-black tracking-tight">Your Shopping Cart</h2>
-                  <span className="bg-white/20 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                    {totalItemsCount}
-                  </span>
+                  <span className="bg-white/20 text-xs px-2.5 py-0.5 rounded-full font-bold">{totalItemsCount}</span>
                 </div>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-lg transition-colors cursor-pointer"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setIsCartOpen(false)} className="w-8 h-8 rounded-full bg-white/10 text-white font-bold text-lg cursor-pointer">✕</button>
               </div>
 
-              {/* Cart Items List */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {cartItems.length > 0 ? (
                   cartItems.map((item, idx) => {
-                    const itemId = item.id || item._id;
+                    const itemId = item._id || item.id;
                     return (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3"
-                      >
+                      <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <img
-                            src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"}
-                            alt={item.title}
-                            className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0"
-                          />
+                          <img src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"} alt={item.title} className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0" />
                           <div className="min-w-0">
-                            <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">
-                              {item.title}
-                            </h4>
-                            <span className="text-xs font-bold text-[#00875A] block">
-                              ৳ {item.price}
-                            </span>
+                            <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">{item.title}</h4>
+                            <span className="text-xs font-bold text-[#00875A] block">৳ {item.price}</span>
                           </div>
                         </div>
-
-                        {/* Quantity Controls */}
                         <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-gray-200">
-                          <button
-                            onClick={() => updateQuantity(itemId, -1)}
-                            className="text-xs font-black text-gray-600 px-1 hover:text-[#00875A] cursor-pointer"
-                          >
-                            -
-                          </button>
-                          <span className="text-xs font-black text-gray-900">
-                            {item.quantity || 1}
-                          </span>
-                          <button
-                            onClick={() => updateQuantity(itemId, 1)}
-                            className="text-xs font-black text-gray-600 px-1 hover:text-[#00875A] cursor-pointer"
-                          >
-                            +
-                          </button>
+                          <button onClick={() => updateQuantity(itemId, -1)} className="text-xs font-black text-gray-600 px-1 cursor-pointer">-</button>
+                          <span className="text-xs font-black text-gray-900">{item.quantity || 1}</span>
+                          <button onClick={() => updateQuantity(itemId, 1)} className="text-xs font-black text-gray-600 px-1 cursor-pointer">+</button>
                         </div>
-
-                        {/* Remove Item Button */}
-                        <button
-                          onClick={() => removeFromCart(itemId)}
-                          className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 transition-colors cursor-pointer"
-                          title="Remove Item"
-                        >
-                          🗑️
-                        </button>
+                        <button onClick={() => removeFromCart(itemId)} className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 cursor-pointer">🗑️</button>
                       </div>
                     );
                   })
@@ -249,39 +323,21 @@ export default function SiteHeader() {
                   <div className="text-center py-20 space-y-3">
                     <div className="text-5xl">🛍️</div>
                     <h3 className="font-extrabold text-sm text-gray-800">Your cart is empty</h3>
-                    <p className="text-xs text-gray-400 max-w-xs mx-auto">
-                      Explore our catalog and add items to your shopping cart!
-                    </p>
                   </div>
                 )}
               </div>
 
-              {/* Drawer Footer */}
               {cartItems.length > 0 && (
                 <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
                   <div className="flex items-center justify-between text-sm font-black text-gray-900">
                     <span>Subtotal</span>
                     <span className="text-[#00875A] text-lg">৳ {totalAmount.toFixed(2)}</span>
                   </div>
-
-                  <Link
-                    href="/checkout"
-                    onClick={() => setIsCartOpen(false)}
-                    className="w-full py-3.5 bg-[#F25C05] hover:bg-[#D95000] text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <span>Proceed to Checkout</span>
-                    <span>→</span>
+                  <Link href="/checkout" onClick={() => setIsCartOpen(false)} className="w-full py-3.5 bg-[#F25C05] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer">
+                    <span>Proceed to Checkout</span> <span>→</span>
                   </Link>
-
-                  <button
-                    onClick={() => setIsCartOpen(false)}
-                    className="w-full py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 text-center cursor-pointer"
-                  >
-                    Continue Shopping
-                  </button>
                 </div>
               )}
-
             </div>
           </div>
         </div>

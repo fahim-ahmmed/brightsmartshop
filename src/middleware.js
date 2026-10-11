@@ -1,19 +1,27 @@
-import { NextResponse } from 'next/server';
-import { getSessionCookie } from 'better-auth/cookies';
+import { NextResponse } from "next/server";
 
-// শুধু কুকি আছে কিনা দেখে দ্রুত redirect করে। আসল যাচাই হয় পেজের ভেতরে (requireUser)।
-const PROTECTED = ['/dashboard', '/profile', '/checkout', '/orders', '/admin'];
-
-export function middleware(request) {
+export async function middleware(request) {
   const { pathname } = request.nextUrl;
-  const hasSession = !!getSessionCookie(request);
 
-  if (!hasSession && PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // শুধু /admin এবং /admin/... রুটগুলোর জন্য সিকিউরিটি চেক
+  if (pathname.startsWith("/admin")) {
+    // Better Auth এর সেসন কুকি চেক করা
+    const sessionCookie = 
+      request.cookies.get("better-auth.session_token") ||
+      request.cookies.get("__Secure-better-auth.session_token");
+
+    // ১. যদি সেসন কুকি না থাকে, তবে সরাসরি /login পেজে পাঠাবে
+    if (!sessionCookie) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
   }
+
   return NextResponse.next();
 }
 
+// কোন কোন পাথে Middleware রান করবে
 export const config = {
-  matcher: ['/dashboard/:path*', '/profile/:path*', '/checkout/:path*', '/orders/:path*', '/admin/:path*'],
+  matcher: ["/admin/:path*"],
 };

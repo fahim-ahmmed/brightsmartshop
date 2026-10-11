@@ -1,165 +1,190 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
 
-const CATEGORIES_LIST = [
-  { name: "Grocery", icon: "🌾" },
-  { name: "Fashion", icon: "👕" },
-  { name: "Cosmetics", icon: "🧴" },
-  { name: "Beauty Care", icon: "🪷" },
-  { name: "Health & Medicine", icon: "💊" },
-  { name: "Electronics", icon: "📺" },
-  { name: "Home & Kitchen", icon: "🍳" },
-  { name: "Offers", icon: "🏷️" },
-];
-
-export default function AddProductPage() {
+export default function AdminAddProductPage() {
   const [formData, setFormData] = useState({
     title: "",
-    price: "",
-    originalPrice: "",
-    points: "",
-    category: "Grocery",
-    description: "",
-    image: "📦",
+    category: "grocery",
+    costPrice: 0, // বাইং প্রাইস
+    price: 0,     // সেলিং প্রাইস
+    originalPrice: 0,
+    unit: "1 Pcs",
+    image: "",
   });
 
+  const [calculatedPoints, setCalculatedPoints] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState({ type: "", text: "" });
+
+  // 🟢 অটোমেটিক পয়েন্ট ক্যালকুলেশন লজিক: (Selling Price - Buying Price) / 2.25
+  useEffect(() => {
+    const cost = parseFloat(formData.costPrice) || 0;
+    const sell = parseFloat(formData.price) || 0;
+
+    if (sell > cost && cost >= 0) {
+      const profit = sell - cost;
+      const pts = profit / 2.25;
+      // ২ দশমিক স্থান পর্যন্ত সুন্দর রাখার জন্য (যেমন: 8.89 বা Math.floor ব্যবহার করতে পারেন)
+      setCalculatedPoints(Number(pts.toFixed(2)));
+    } else {
+      setCalculatedPoints(0);
+    }
+  }, [formData.costPrice, formData.price]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setMsg({ type: "", text: "" });
 
     try {
+      const payload = {
+        ...formData,
+        costPrice: Number(formData.costPrice),
+        price: Number(formData.price),
+        points: calculatedPoints, // অটো ক্যালকুলেটেড পয়েন্ট পাঠানো হচ্ছে
+      };
+
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "প্রোডাক্ট আপলোড করা যায়নি।");
+      if (res.ok) {
+        alert(`✅ প্রোডাক্ট সফলভাবে যুক্ত হয়েছে! পয়েন্ট অর্জিত: ${calculatedPoints} Points`);
+        setFormData({
+          title: "",
+          category: "grocery",
+          costPrice: 0,
+          price: 0,
+          originalPrice: 0,
+          unit: "1 Pcs",
+          image: "",
+        });
+      } else {
+        alert("⚠️ প্রোডাক্ট যোগ করতে ব্যর্থ হয়েছে!");
       }
-
-      setMsg({ type: "success", text: "প্রোডাক্টটি সফলভাবে সেভ হয়েছে এবং সাইটে লাইভ হয়েছে!" });
-      setFormData({
-        title: "",
-        price: "",
-        originalPrice: "",
-        points: "",
-        category: "Grocery",
-        description: "",
-        image: "📦",
-      });
     } catch (err) {
-      setMsg({ type: "error", text: err.message || "একটি সমস্যা ঘটেছে।" });
+      console.error("Save product error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/60 p-6 sm:p-10 max-w-3xl mx-auto space-y-6 font-sans">
-      <div className="flex items-center justify-between border-b pb-4">
-        <div>
-          <span className="text-[10px] font-black text-[#00875A] uppercase tracking-widest block">ADMIN PANEL</span>
-          <h1 className="text-2xl font-black text-gray-900">Add New Product</h1>
-        </div>
-        <Link href="/admin" className="text-xs font-bold text-gray-600 hover:underline">← Back to Admin</Link>
-      </div>
+    <div className="max-w-2xl mx-auto my-10 p-8 bg-white rounded-3xl border border-gray-200 shadow-xl font-sans text-gray-800">
+      <h1 className="text-2xl font-black text-[#00875A] mb-2">নতুন প্রোডাক্ট যুক্ত করুন</h1>
+      <p className="text-xs text-gray-500 mb-6">
+        বাইং প্রাইস এবং সেলিং প্রাইস দিলে অটোমেটিক রিওয়ার্ড পয়েন্ট হিসেব হয়ে যাবে।
+      </p>
 
-      {msg.text && (
-        <div className={`p-4 rounded-xl text-xs font-bold ${msg.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
-          {msg.text}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5 text-xs">
         <div>
-          <label className="text-xs font-bold text-gray-700 block mb-1">Product Title *</label>
+          <label className="font-bold block mb-1">প্রোডাক্টের নাম *</label>
           <input
             type="text"
             required
-            placeholder="যেমন: ACI Pure Rice 5kg"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full bg-gray-50 border rounded-xl p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#00875A]/20"
+            placeholder="যেমন: মিনিকেট চাল ২৫ কেজি"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold text-gray-700 block mb-1">Selling Price (৳) *</label>
-            <input
-              type="number"
-              required
-              placeholder="195"
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-              className="w-full bg-gray-50 border rounded-xl p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#00875A]/20"
-            />
+            <label className="font-bold block mb-1">ক্যাটাগরি *</label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
+            >
+              <option value="grocery">Grocery & Daily Essentials</option>
+              <option value="cosmetics">Beauty & Cosmetics</option>
+              <option value="fashion">Fashion & Clothing</option>
+              <option value="kitchen">Home & Kitchen</option>
+              <option value="electronics">Electronics</option>
+            </select>
           </div>
 
           <div>
-            <label className="text-xs font-bold text-gray-700 block mb-1">Original Price (৳)</label>
+            <label className="font-bold block mb-1">পরিমাণ/ওজন (Unit) *</label>
             <input
-              type="number"
-              placeholder="220"
-              value={formData.originalPrice}
-              onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })}
-              className="w-full bg-gray-50 border rounded-xl p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#00875A]/20"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-gray-700 block mb-1">Reward Points</label>
-            <input
-              type="number"
-              placeholder="5"
-              value={formData.points}
-              onChange={(e) => setFormData({ ...formData, points: e.target.value })}
-              className="w-full bg-gray-50 border rounded-xl p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#00875A]/20"
+              type="text"
+              value={formData.unit}
+              onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+              placeholder="1 Pcs / 1 Kg / 500 ml"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
             />
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-bold text-gray-700 block mb-1">Select Category *</label>
-          <select
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full bg-gray-50 border rounded-xl p-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#00875A]/20"
-          >
-            {CATEGORIES_LIST.map((cat) => (
-              <option key={cat.name} value={cat.name}>
-                {cat.icon} {cat.name}
-              </option>
-            ))}
-          </select>
+        {/* PRICE & POINT CALCULATION BOX */}
+        <div className="bg-emerald-50/60 border border-emerald-200/80 p-4 rounded-2xl space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="font-black text-gray-800 block mb-1">
+                কেনা প্রাইস (Buying Price) ৳ *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={formData.costPrice}
+                onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                placeholder="যেমন: 100"
+                className="w-full bg-white border border-gray-300 rounded-xl p-3 font-bold text-gray-900 focus:outline-none focus:border-[#00875A]"
+              />
+            </div>
+
+            <div>
+              <label className="font-black text-gray-800 block mb-1">
+                বিক্রয় প্রাইস (Selling Price) ৳ *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                placeholder="যেমন: 145"
+                className="w-full bg-white border border-gray-300 rounded-xl p-3 font-bold text-gray-900 focus:outline-none focus:border-[#00875A]"
+              />
+            </div>
+          </div>
+
+          {/* AUTO CALCULATED POINT CARD */}
+          <div className="bg-white p-3.5 rounded-xl border border-emerald-300/80 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold text-gray-500 block">
+                প্রফিট: ৳{Math.max(0, formData.price - formData.costPrice)}
+              </span>
+              <span className="text-xs font-black text-[#00875A]">
+                অটোমেটিক রিওয়ার্ড পয়েন্ট (Profit ÷ 2.25):
+              </span>
+            </div>
+            <div className="bg-[#00875A] text-white px-3.5 py-1.5 rounded-xl font-black text-sm shadow-2xs">
+              🌟 {calculatedPoints} Points
+            </div>
+          </div>
         </div>
 
         <div>
-          <label className="text-xs font-bold text-gray-700 block mb-1">Product Icon / Image Emoji</label>
+          <label className="font-bold block mb-1">ছবি URL *</label>
           <input
             type="text"
-            placeholder="🍚, 🍾, 👔, 🧴, 🪷, 🩺, 🎧, 🍳"
             value={formData.image}
             onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-            className="w-full bg-gray-50 border rounded-xl p-3 text-xs font-semibold focus:outline-none"
+            placeholder="https://..."
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-[#00875A] hover:bg-[#00704A] text-white font-extrabold text-xs rounded-2xl transition-all cursor-pointer disabled:opacity-50"
+          className="w-full py-3.5 bg-[#F25C05] hover:bg-[#D95000] text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
         >
-          {loading ? "Uploading Product..." : "Upload & Save Permanently →"}
+          {loading ? "সেভ হচ্ছে..." : "🚀 প্রোডাক্ট যোগ করুন"}
         </button>
       </form>
     </div>

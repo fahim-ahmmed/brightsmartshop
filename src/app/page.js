@@ -51,17 +51,19 @@ export default function HomePage() {
       id: product._id || product.id,
       title: product.title,
       price: product.price,
+      points: product.points || product.point || 0,
+      unit: product.unit || product.weight || "1 Pcs",
       image: product.image,
     });
   };
 
   // Direct Buy Now Action
   const handleBuyNow = (product) => {
-    // Pass minimal query parameters to prevent URL overflow
     const params = new URLSearchParams({
       id: product._id || product.id || "",
       title: product.title || "",
       price: product.price || 0,
+      point: product.points || product.point || 0,
     });
     router.push(`/checkout?${params.toString()}`);
   };
@@ -328,7 +330,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 4. POPULAR PRODUCTS (Catalog populated by Admin MongoDB Uploads) */}
+        {/* 4. POPULAR PRODUCTS */}
         <section className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-6">
           <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-4">
             <h2 className="text-2xl sm:text-3xl font-black text-[#00875A] tracking-tight">
@@ -369,22 +371,35 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Title & Category */}
-                  <div className="space-y-1 mb-3">
-                    <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                      {p.category || "General"}
-                    </span>
+                  {/* Title, Category & Unit */}
+                  <div className="space-y-1 mb-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                        {p.category || "General"}
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                        📦 {p.unit || p.weight || "1 Pcs"}
+                      </span>
+                    </div>
                     <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
                       {p.title}
                     </h3>
                   </div>
 
                   {/* Price */}
-                  <div className="pt-2 border-t border-gray-100 mb-3 flex items-baseline gap-2">
+                  <div className="pt-2 border-t border-gray-100 mb-2 flex items-baseline gap-2">
                     <span className="text-base font-black text-gray-900">৳{p.price}</span>
                     {p.originalPrice > p.price && (
                       <span className="text-[11px] text-gray-400 line-through font-bold">৳{p.originalPrice}</span>
                     )}
+                  </div>
+
+                  {/* Reward Points */}
+                  <div className="mb-2.5 bg-amber-50 border border-amber-200/80 rounded-xl p-1.5 flex items-center justify-between text-[11px] font-black text-amber-800">
+                    <span>🌟 রিওয়ার্ড পয়েন্ট:</span>
+                    <span className="bg-amber-500 text-white px-2 py-0.5 rounded-lg text-[10px]">
+                      +{p.points || p.point || 0} Points
+                    </span>
                   </div>
 
                   {/* Buy Now & Cart Buttons */}
