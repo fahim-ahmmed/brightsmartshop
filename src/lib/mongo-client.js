@@ -1,16 +1,12 @@
-import { MongoClient } from "mongodb";
+import { MongoClient } from 'mongodb';
 
-const uri = process.env.MONGODB_URI;
+const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
 const options = {};
-
-if (!process.env.MONGODB_URI) {
-  throw new Error("Please add your Mongo URI to .env.local");
-}
 
 let client;
 let clientPromise;
 
-if (process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV === 'development') {
   if (!global._mongoClientPromise) {
     client = new MongoClient(uri, options);
     global._mongoClientPromise = client.connect();
@@ -21,7 +17,19 @@ if (process.env.NODE_ENV === "development") {
   clientPromise = client.connect();
 }
 
-// 🟢 DB এক্সপোর্ট নিশ্চিত করুন
-const clientAdapter = await clientPromise;
-export const db = clientAdapter.db(); // ডাটাবেজ অবজেক্ট
+// Better Auth এবং অ্যাপ্লিকেশনের ব্যবহারের জন্য db ও কালেকশন হেল্পার
+export const db = client.db();
+export const getUserCollection = () => db.collection('user');
+
+let indexPromise;
+export function ensureUserIndexes() {
+  indexPromise ||= getUserCollection()
+    .createIndex({ mobile: 1 }, { unique: true, partialFilterExpression: { mobile: { $type: 'string' } } })
+    .catch((e) => {
+      indexPromise = null;
+      console.error('[auth] index error:', e.message);
+    });
+  return indexPromise;
+}
+
 export default clientPromise;
