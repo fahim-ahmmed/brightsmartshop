@@ -7,9 +7,13 @@ let client;
 let clientPromise;
 
 if (process.env.NODE_ENV === 'development') {
-  if (!global._mongoClientPromise) {
+  // ক্যাশ চেক করার সময় client এবং clientPromise উভয়কেই সংরক্ষণ করতে হবে
+  if (!global._mongoClient) {
     client = new MongoClient(uri, options);
+    global._mongoClient = client;
     global._mongoClientPromise = client.connect();
+  } else {
+    client = global._mongoClient;
   }
   clientPromise = global._mongoClientPromise;
 } else {
@@ -17,7 +21,7 @@ if (process.env.NODE_ENV === 'development') {
   clientPromise = client.connect();
 }
 
-// Better Auth এবং অ্যাপ্লিকেশনের ব্যবহারের জন্য db ও কালেকশন হেল্পার
+// এখন client সঠিকভাবে পাওয়া যাবে, তাই আর undefined এরর আসবে না
 export const db = client.db();
 export const getUserCollection = () => db.collection('user');
 

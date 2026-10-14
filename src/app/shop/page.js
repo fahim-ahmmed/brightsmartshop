@@ -163,20 +163,22 @@ function ShopContent() {
                 </h3>
               </div>
 
-              {/* Price */}
-              <div className="pt-2 border-t border-gray-100 mb-2 flex items-baseline gap-2">
-                <span className="text-base font-black text-gray-900">৳{p.price}</span>
-                {p.originalPrice > p.price && (
-                  <span className="text-[11px] text-gray-400 line-through font-bold">৳{p.originalPrice}</span>
-                )}
-              </div>
+              {/* 3 Items in 1 Line: Price (Left) & Points (Right) */}
+              <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
+                
+                {/* বামপাশে প্রাইস ও অরিজিনাল প্রাইস (এক লাইনে) */}
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-black text-gray-900">৳{p.price}</span>
+                  {p.originalPrice > p.price && (
+                    <span className="text-[11px] text-gray-400 line-through font-bold">৳{p.originalPrice}</span>
+                  )}
+                </div>
 
-              {/* Reward Points */}
-              <div className="mb-2.5 bg-amber-50 border border-amber-200/80 rounded-xl p-1.5 flex items-center justify-between text-[11px] font-black text-amber-800">
-                <span>🌟 রিওয়ার্ড পয়েন্ট:</span>
-                <span className="bg-amber-500 text-white px-2 py-0.5 rounded-lg text-[10px]">
+                {/* ডানপাশে পয়েন্ট (এক লাইনে) */}
+                <span className="text-xs font-bold text-gray-700">
                   +{p.points || p.point || 0} Points
                 </span>
+
               </div>
 
               {/* Buy Now & Add to Cart Buttons */}

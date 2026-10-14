@@ -42,6 +42,19 @@ const nextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
+  // সিক্রেট অ্যাডমিন রুট রিরাইটস (Domain/219192026 -> /admin)
+  async rewrites() {
+    return [
+      {
+        source: '/219192026/:path*',
+        destination: '/admin/:path*',
+      },
+      {
+        source: '/219192026',
+        destination: '/admin',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

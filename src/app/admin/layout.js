@@ -1,15 +1,59 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+  const [userRole, setUserRole] = useState("Admin");
 
-  // 🟢 সিকিউরিটি ফিক্স: লগইন পেজে সাইডবার এবং মোবাইল হেডার সম্পূর্ণ হাইড থাকবে
-  if (pathname === "/admin/login") {
+  useEffect(() => {
+    if (pathname === "/219192026/login" || pathname === "/admin/login") {
+      setIsVerified(true);
+      return;
+    }
+
+    const adminToken = localStorage.getItem("admin_logged_in");
+    const savedUser = localStorage.getItem("bright_user");
+
+    if (!adminToken) {
+      router.push("/219192026/login");
+      return;
+    }
+
+    try {
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        const role = u.role || "Admin";
+        setUserRole(role);
+
+        // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড (/219192026) এবং প্রোডাক্ট পেজ (/219192026/products) এ যাওয়ার অনুমতি থাকবে
+        const isSubAdmin = role.toLowerCase() === "sub-admin" || role.toLowerCase() === "subadmin";
+        
+        if (isSubAdmin) {
+          const allowedPaths = ["/219192026", "/219192026/products", "/admin", "/admin/products"];
+          const isAllowed = allowedPaths.some(path => pathname === path || pathname.startsWith(path + "/"));
+          
+          if (!isAllowed) {
+            toast.error("সাব-এডমিনের শুধুমাত্র ড্যাশবোর্ড এবং প্রোডাক্ট আপলোড করার অ্যাক্সেস রয়েছে!");
+            router.push("/219192026");
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Role check error", e);
+    }
+
+    setIsVerified(true);
+  }, [pathname, router]);
+
+  if (pathname === "/219192026/login" || pathname === "/admin/login") {
     return (
       <div className="min-h-screen bg-[#0F172A] text-slate-100 font-sans w-full">
         {children}
@@ -17,17 +61,33 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  const navItems = [
-    { label: "Dashboard", href: "/admin", icon: "📊" },
-    { label: "Products & Upload", href: "/admin/products", icon: "📦" },
-    { label: "Wishlist Requests", href: "/admin/wishlist", icon: "❤️" },
-    { label: "Orders", href: "/admin/orders", icon: "📋" },
-    { label: "Categories", href: "/admin/categories", icon: "🏷️" },
-    { label: "Withdrawals", href: "/admin/withdrawals", icon: "💳" },
-    { label: "Hero Banners", href: "/admin/banners", icon: "🖼️" },
-    { label: "Management Team", href: "/admin/team", icon: "👥" },
-    { label: "Users", href: "/admin/users", icon: "👤" },
+  if (!isVerified) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-emerald-400 font-bold text-sm">
+        নিরাপত্তা যাচাই করা হচ্ছে...
+      </div>
+    );
+  }
+
+  const isSubAdmin = userRole.toLowerCase() === "sub-admin" || userRole.toLowerCase() === "subadmin";
+
+  // মূল নেভিগেশন লিস্ট
+  const allNavItems = [
+    { label: "Dashboard", href: "/219192026", icon: "📊" },
+    { label: "Products & Upload", href: "/219192026/products", icon: "📦" },
+    { label: "Wishlist Requests", href: "/219192026/wishlist", icon: "❤️" },
+    { label: "Orders", href: "/219192026/orders", icon: "📋" },
+    { label: "Categories", href: "/219192026/categories", icon: "🏷️" },
+    { label: "Withdrawals", href: "/219192026/withdrawals", icon: "💳" },
+    { label: "Hero Banners", href: "/219192026/banners", icon: "🖼️" },
+    { label: "Management Team", href: "/219192026/team", icon: "👥" },
+    { label: "Users", href: "/219192026/users", icon: "👤" },
   ];
+
+  // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড এবং প্রোডাক্টস অপশন ফিল্টার করে দেখাবে
+  const navItems = isSubAdmin
+    ? allNavItems.filter(item => item.href === "/219192026" || item.href === "/219192026/products")
+    : allNavItems;
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-100 font-sans flex flex-col lg:flex-row w-full min-w-full">
@@ -35,12 +95,19 @@ export default function AdminLayout({ children }) {
       {/* MOBILE TOP HEADER */}
       <div className="lg:hidden w-full bg-[#0B132B] p-4 border-b border-slate-800 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-xs">
-            bss
-          </div>
+          <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+            <img
+              src="/logo.jpg"
+              alt="Bright Smart Shop Logo"
+              className="h-10 sm:h-12 w-auto object-contain rounded-xl"
+            />
+          </Link>
+
           <div>
             <span className="font-bold text-sm text-white block">Bright Smart Shop</span>
-            <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest block">ADMIN PANEL</span>
+            <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest block">
+              {isSubAdmin ? "SUB-ADMIN PANEL" : "ADMIN PANEL"}
+            </span>
           </div>
         </div>
 
@@ -74,15 +141,17 @@ export default function AdminLayout({ children }) {
         <div>
           {/* Logo */}
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black text-base flex items-center justify-center shadow-md">
-              bss
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="Bright Smart Shop Logo"
+              className="h-10 w-auto object-contain rounded-xl"
+            />
             <div>
-              <span className="font-extrabold text-white text-base tracking-tight block">
+              <span className="font-extrabold text-white text-sm tracking-tight block">
                 Bright Smart Shop
               </span>
               <span className="text-[10px] text-emerald-400 font-black tracking-widest uppercase block">
-                ADMIN CONTROL
+                {isSubAdmin ? "SUB-ADMIN CONTROL" : "ADMIN CONTROL"}
               </span>
             </div>
           </div>
@@ -109,14 +178,25 @@ export default function AdminLayout({ children }) {
           </nav>
         </div>
 
-        {/* Bottom Website Link */}
-        <div className="p-4 border-t border-slate-800/80">
+        {/* Bottom Website Link & Logout */}
+        <div className="p-4 border-t border-slate-800/80 space-y-2">
           <Link
             href="/"
             className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-400 hover:text-emerald-400 transition-colors"
           >
             <span>🌐</span> Back to Main Store
           </Link>
+          <button
+            onClick={() => {
+              localStorage.removeItem("admin_logged_in");
+              localStorage.removeItem("bright_user");
+              document.cookie = "admin_session=; path=/; max-age=0;";
+              router.push("/219192026/login");
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
+          >
+            <span>🚪</span> Logout
+          </button>
         </div>
       </aside>
 

@@ -190,47 +190,63 @@ export default function ShopListing({ products = [], categories = [] }) {
       {/* Product Display Grid */}
       {products.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <Link
-              key={product._id}
-              href={`/product/${product.slug}`}
-              className="group bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                <div className="relative w-full h-48 bg-gray-50/80 rounded-xl overflow-hidden flex items-center justify-center p-3">
-                  <img
-                    src={product.image || "/hero1.jpg"}
-                    alt={product.name}
-                    className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                  />
-                  {product.isFeatured && (
-                    <span className="absolute top-2 left-2 bg-amber-500 text-white font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md shadow-xs">
-                      Featured
-                    </span>
-                  )}
-                </div>
-                <h3 className="font-semibold text-gray-800 text-sm group-hover:text-emerald-600 transition-colors line-clamp-2">
-                  {product.name}
-                </h3>
-              </div>
+          {products.map((product) => {
+            const points = product.points ?? product.point ?? product.rewardPoints ?? 0;
 
-              <div className="pt-3 border-t border-gray-50 mt-3 flex items-center justify-between">
-                <div>
-                  <span className="text-base font-extrabold text-emerald-700">
-                    ৳{product.price}
-                  </span>
-                  {product.originalPrice && (
-                    <span className="text-xs text-gray-400 line-through ml-2">
-                      ৳{product.originalPrice}
-                    </span>
-                  )}
+            return (
+              <Link
+                key={product._id || product.id}
+                href={`/product/${product.slug || product._id || product.id}`}
+                className="group bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all duration-300 flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="relative w-full h-48 bg-gray-50/80 rounded-xl overflow-hidden flex items-center justify-center p-3">
+                    <img
+                      src={product.image || "/hero1.jpg"}
+                      alt={product.name || product.title}
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {product.isFeatured && (
+                      <span className="absolute top-2 left-2 bg-amber-500 text-white font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md shadow-xs">
+                        Featured
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-gray-800 text-sm group-hover:text-emerald-600 transition-colors line-clamp-2">
+                    {product.name || product.title}
+                  </h3>
                 </div>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                  View
-                </span>
-              </div>
-            </Link>
-          ))}
+
+                {/* Price & Reward Points Row (প্রাইসের বামপাশে পয়েন্ট) */}
+                <div className="pt-3 border-t border-gray-100 mt-3 flex items-center justify-between bg-gray-50/80 p-2 rounded-xl border border-gray-100">
+                  
+                  {/* বামপাশে পয়েন্ট ব্যাজ */}
+                  <div className="flex items-center gap-1 bg-amber-500/10 text-amber-700 px-2 py-1 rounded-lg border border-amber-500/20">
+                    <span className="text-xs font-black">+{points} পয়েন্ট</span>
+                  </div>
+
+                  {/* ডানপাশে প্রাইস */}
+                  <div className="text-right">
+                    <span className="text-base font-black text-emerald-700 block">
+                      ৳{product.price}
+                    </span>
+                    {product.originalPrice && product.originalPrice > product.price && (
+                      <span className="text-xs text-gray-400 line-through block">
+                        ৳{product.originalPrice}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bottom Action */}
+                <div className="mt-2 text-center">
+                  <span className="block w-full py-2 text-xs font-bold text-emerald-600 bg-emerald-50 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                    View Product
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center space-y-3 shadow-xs">

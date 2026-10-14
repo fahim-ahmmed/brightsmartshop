@@ -89,6 +89,12 @@ export default function SiteHeader() {
   const defaultHumanAvatar =
     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
 
+  // 🎯 মোট রিওয়ার্ড পয়েন্ট হিসেব
+  const totalPoints = cartItems.reduce((acc, item) => {
+    const pts = Number(item.points || item.point || item.rewardPoints || 0);
+    return acc + pts * (item.quantity || 1);
+  }, 0);
+
   return (
     <>
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-2xs font-sans h-16 sm:h-20">
@@ -172,7 +178,7 @@ export default function SiteHeader() {
               </div>
             </button>
 
-            {/* 🌟 DASHBOARD BUTTON & USER PROFILE AREA */}
+            {/* USER PROFILE AREA */}
             <div className="flex items-center gap-2 ml-1" ref={dropdownRef}>
               {isPending ? (
                 <div className="text-xs font-bold text-[#00875A] animate-pulse px-2">
@@ -180,17 +186,6 @@ export default function SiteHeader() {
                 </div>
               ) : currentUser ? (
                 <div className="flex items-center gap-2.5">
-                  
-                  {/* 1. Dashboard Button: সবসময় শুধু /client/dashboard এ যাবে এবং টেক্সট হবে "Dashboard" */}
-                  <Link
-                    href="/client/dashboard"
-                    className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs sm:text-sm rounded-2xl shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>📊</span>
-                    <span>Dashboard</span>
-                  </Link>
-
-                  {/* 2. USER PROFILE AVATAR & NAME DROPDOWN */}
                   <div className="relative">
                     <button
                       type="button"
@@ -257,7 +252,6 @@ export default function SiteHeader() {
                       </div>
                     )}
                   </div>
-
                 </div>
               ) : (
                 <>
@@ -282,12 +276,14 @@ export default function SiteHeader() {
         </div>
       </header>
 
-      {/* Side Cart Drawer */}
+      {/* 🛒 Side Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden font-sans">
           <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
+              
+              {/* Header */}
               <div className="p-6 bg-[#00875A] text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">🛒</span>
@@ -297,25 +293,47 @@ export default function SiteHeader() {
                 <button onClick={() => setIsCartOpen(false)} className="w-8 h-8 rounded-full bg-white/10 text-white font-bold text-lg cursor-pointer">✕</button>
               </div>
 
+              {/* Cart Items List */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {cartItems.length > 0 ? (
                   cartItems.map((item, idx) => {
                     const itemId = item._id || item.id;
+                    const unitPoints = Number(item.points || item.point || item.rewardPoints || 0);
+                    const itemTotalPoints = unitPoints * (item.quantity || 1);
+
                     return (
                       <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3">
+                        
+                        {/* Image & Title/Price */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <img src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"} alt={item.title} className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0" />
+                          <img 
+                            src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"} 
+                            alt={item.title} 
+                            className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0" 
+                          />
                           <div className="min-w-0">
                             <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">{item.title}</h4>
                             <span className="text-xs font-bold text-[#00875A] block">৳ {item.price}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-gray-200">
-                          <button onClick={() => updateQuantity(itemId, -1)} className="text-xs font-black text-gray-600 px-1 cursor-pointer">-</button>
-                          <span className="text-xs font-black text-gray-900">{item.quantity || 1}</span>
-                          <button onClick={() => updateQuantity(itemId, 1)} className="text-xs font-black text-gray-600 px-1 cursor-pointer">+</button>
+
+                        {/* 🎯 Controls + Points Underneath */}
+                        <div className="flex flex-col items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-gray-200">
+                              <button onClick={() => updateQuantity(itemId, -1)} className="text-xs font-black text-gray-600 px-1 cursor-pointer">-</button>
+                              <span className="text-xs font-black text-gray-900">{item.quantity || 1}</span>
+                              <button onClick={() => updateQuantity(itemId, 1)} className="text-xs font-black text-gray-600 px-1 cursor-pointer">+</button>
+                            </div>
+                            <button onClick={() => removeFromCart(itemId)} className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 cursor-pointer">🗑️</button>
+                          </div>
+
+                          {/* 🎯 সংখ্যার নিচে আইটেমের পয়েন্ট হিসাব */}
+                          <span className="text-[11px] font-bold text-[#00875A] text-center block">
+                            +{itemTotalPoints} Points
+                          </span>
                         </div>
-                        <button onClick={() => removeFromCart(itemId)} className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 cursor-pointer">🗑️</button>
+
                       </div>
                     );
                   })
@@ -327,17 +345,27 @@ export default function SiteHeader() {
                 )}
               </div>
 
+              {/* Footer Subtotal & Total Points */}
               {cartItems.length > 0 && (
                 <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
+                  
+                  {/* 🎯 Subtotal & Total Points */}
                   <div className="flex items-center justify-between text-sm font-black text-gray-900">
-                    <span>Subtotal</span>
+                    <div>
+                      <span className="block">Subtotal</span>
+                      <span className="text-xs font-extrabold text-[#00875A] block">
+                        Total: +{totalPoints} Points
+                      </span>
+                    </div>
                     <span className="text-[#00875A] text-lg">৳ {totalAmount.toFixed(2)}</span>
                   </div>
+
                   <Link href="/checkout" onClick={() => setIsCartOpen(false)} className="w-full py-3.5 bg-[#F25C05] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer">
                     <span>Proceed to Checkout</span> <span>→</span>
                   </Link>
                 </div>
               )}
+
             </div>
           </div>
         </div>

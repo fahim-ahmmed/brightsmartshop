@@ -29,10 +29,11 @@ export function CartProvider({ children }) {
     }
   }, [cartItems]);
 
-  // Add Item to Cart (Increments quantity if already exists)
+  // Add Item to Cart (Increments quantity if already exists & saves points)
   const addToCart = (product) => {
     setCartItems((prevItems) => {
       const pId = product._id || product.id;
+      const points = Number(product.points || product.point || product.rewardPoints || 0);
       const existingIndex = prevItems.findIndex(
         (item) => (item._id || item.id) === pId
       );
@@ -41,11 +42,12 @@ export function CartProvider({ children }) {
         const updated = [...prevItems];
         updated[existingIndex] = {
           ...updated[existingIndex],
+          points: points || updated[existingIndex].points || 0,
           quantity: (updated[existingIndex].quantity || 1) + 1,
         };
         return updated;
       } else {
-        return [...prevItems, { ...product, id: pId, quantity: 1 }];
+        return [...prevItems, { ...product, id: pId, points, quantity: 1 }];
       }
     });
   };
@@ -55,7 +57,7 @@ export function CartProvider({ children }) {
     setCartItems((prev) => prev.filter((item) => (item._id || item.id) !== id));
   };
 
-  // Update Quantity
+  // Update Quantity (delta: +1 or -1)
   const updateQuantity = (id, delta) => {
     setCartItems((prev) =>
       prev
@@ -79,7 +81,14 @@ export function CartProvider({ children }) {
   );
 
   const totalAmount = cartItems.reduce(
-    (acc, item) => acc + (item.price || 0) * (item.quantity || 1),
+    (acc, item) => acc + (Number(item.price) || 0) * (item.quantity || 1),
+    0
+  );
+
+  // স্বয়ংক্রিয় পয়েন্ট যোগফল (আইটেম পয়েন্ট × পরিমাণ)
+  const totalPoints = cartItems.reduce(
+    (acc, item) =>
+      acc + (Number(item.points || item.point || item.rewardPoints) || 0) * (item.quantity || 1),
     0
   );
 
@@ -89,6 +98,7 @@ export function CartProvider({ children }) {
         cartItems,
         totalItemsCount,
         totalAmount,
+        totalPoints,
         addToCart,
         removeFromCart,
         updateQuantity,

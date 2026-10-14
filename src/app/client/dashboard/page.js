@@ -31,7 +31,6 @@ export default function ClientDashboardPage() {
     fetchStats();
   }, []);
 
-  // Priority: DB API Data -> Better Auth Session -> LocalStorage Fallback -> Default Demo
   const localUserRaw = typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
   const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
 
@@ -46,7 +45,6 @@ export default function ClientDashboardPage() {
     currentLevel: 0,
     designation: "No Level",
     newPurchasersAfterMe: 0,
-    nextLevelTarget: 2,
     walletBalance: 0,
     totalOrders: 0,
     pendingPoints: 0,
@@ -54,6 +52,42 @@ export default function ClientDashboardPage() {
     packagePoints: 0,
     totalSponsors: 0,
   };
+
+  // ২৪ লেভেলের টার্গেট প্যাকেজ চার্ট (লেভেল অনুযায়ী পরবর্তী লেভেলে যাওয়ার মোট প্যাকেজ প্রয়োজন)
+  // লেভেল 0 থেকে 1 যেতে ৩ প্যাকেজ, 1 থেকে 2 যেতে ৫ প্যাকেজ, 2 থেকে 3 যেতে ৯ প্যাকেজ ইত্যাদি
+  const levelTargets = {
+    0: 3,
+    1: 5,
+    2: 9,
+    3: 16,
+    4: 33,
+    5: 65,
+    6: 129,
+    7: 257,
+    8: 513,
+    9: 1025,
+    10: 2049,
+    11: 4097,
+    12: 8193,
+    13: 16385,
+    14: 32769,
+    15: 65537,
+    16: 131073,
+    17: 262145,
+    18: 524289,
+    19: 1048577,
+    20: 2097153,
+    21: 4194305,
+    22: 8388609,
+    23: 16777217,
+    24: 16777217,
+  };
+
+  // বর্তমান লেভেল অনুযায়ী টার্গেট প্যাকেজ সংখ্যা নির্ধারণ
+  const currentLevel = stats.currentLevel || 0;
+  const nextLevelTargetPackages = levelTargets[currentLevel] || 3;
+  // ৪০ পয়েন্টে ১ প্যাকেজ (যদি ব্যাকএন্ড থেকে পয়েন্ট আসে)
+  const totalPackagesAfterMe = Math.floor((stats.newPurchasersAfterMe || 0) / 40);
 
   const categoryStats = data?.categoryStats || [
     { name: "Grocery & Daily Essentials", count: 1, color: "#3B82F6" },
@@ -70,7 +104,6 @@ export default function ClientDashboardPage() {
 
   const totalProducts = categoryStats.reduce((sum, item) => sum + item.count, 0);
 
-  // 8 Color Pastel Cards Grid
   const statsCards = [
     { 
       label: "Total orders", 
@@ -79,7 +112,6 @@ export default function ClientDashboardPage() {
       icon: "📍", 
       bg: "bg-[#EBF5FF] text-sky-900 border-[#D6E8FF]" 
     },
-    
     { 
       label: "Total Package", 
       value: (stats.totalPackages || stats.totalOrders).toString(), 
@@ -89,19 +121,18 @@ export default function ClientDashboardPage() {
     },
     { 
       label: "Pending Level", 
-      value: stats.newPurchasersAfterMe.toString(), 
+      value: totalPackagesAfterMe.toString(), 
       subtext: "New packages since last level", 
       icon: "👥", 
       bg: "bg-[#F3E8FF] text-purple-900 border-[#E9D5FF]" 
     },
     { 
       label: stats.designation ? stats.designation : "No Level", 
-      value: `Level 0${stats.currentLevel}`, 
-      subtext: `${stats.newPurchasersAfterMe} packages in network`, 
+      value: `Level 0${currentLevel}`, 
+      subtext: `${totalPackagesAfterMe} packages in network`, 
       icon: "✦", 
       bg: "bg-[#FFFBE6] text-amber-900 border-[#FFF5C2]" 
     },
-     
     { 
       label: "Wallet balance", 
       value: `৳ ${stats.walletBalance.toFixed(2)}`, 
@@ -128,11 +159,8 @@ export default function ClientDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/60 font-sans flex flex-col lg:flex-row text-gray-800 w-full">
-      
-      {/* 1. Dynamic Responsive Sidebar */}
       <DashboardSidebar />
 
-      {/* 2. Main Dashboard Content */}
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1400px] w-full mx-auto overflow-x-hidden">
         
         {/* User Top Strip Header */}
@@ -171,7 +199,7 @@ export default function ClientDashboardPage() {
               <div className="text-left leading-tight">
                 <div className="text-sm font-bold text-gray-900">{user.name}</div>
                 <div className="text-[11px] text-gray-500 font-medium">
-                  {stats.designation || `Level ${stats.currentLevel}`} - ID: <span className="font-bold text-gray-700">{user.id}</span>
+                  {stats.designation || `Level ${currentLevel}`} - ID: <span className="font-bold text-gray-700">{user.id}</span>
                 </div>
               </div>
             </div>
@@ -182,20 +210,20 @@ export default function ClientDashboardPage() {
         <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white p-6 rounded-3xl border border-emerald-500/30 shadow-md space-y-3">
           <div className="flex justify-between items-center text-xs font-extrabold">
             <span className="text-emerald-400 uppercase tracking-widest">
-              🎯 NEW PURCHASERS TRACKER (YOUR LEVEL {stats.currentLevel})
+              🎯 NEW PACKAGES TRACKER (YOUR LEVEL {currentLevel})
             </span>
             <span className="text-gray-300">
-              Target: {stats.nextLevelTarget} Purchasers
+              Target: {nextLevelTargetPackages} Packages
             </span>
           </div>
           <p className="text-xs text-gray-300 leading-relaxed">
-            আপনার কেনার পর ওয়েবসাইট থেকে নতুন <span className="text-emerald-400 font-black text-sm">{stats.newPurchasersAfterMe} জন</span> ক্রেতা কেনাকাটা করেছেন।
+            আপনার কেনার পর ওয়েবসাইট থেকে নতুন <span className="text-emerald-400 font-black text-sm">{totalPackagesAfterMe} টি</span> প্যাকেজ কেনাকাটা করেছেন।
           </p>
           <div className="w-full h-3 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
               style={{
-                width: `${Math.min(100, (stats.newPurchasersAfterMe / (stats.nextLevelTarget || 1)) * 100)}%`,
+                width: `${Math.min(100, (totalPackagesAfterMe / (nextLevelTargetPackages || 1)) * 100)}%`,
               }}
             />
           </div>
@@ -232,8 +260,6 @@ export default function ClientDashboardPage() {
 
         {/* Live Inventory Mix & Category Performance Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left Box: Pie Chart & Category List */}
           <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
             <div className="border-b border-gray-100 pb-3">
               <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block">
@@ -270,7 +296,6 @@ export default function ClientDashboardPage() {
             </div>
           </div>
 
-          {/* Right Box: Collection Overview Progress Bars */}
           <div className="lg:col-span-7 bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
@@ -308,16 +333,11 @@ export default function ClientDashboardPage() {
               })}
             </div>
           </div>
-
         </div>
 
         {/* Shortcuts, Recent Orders & Sponsor Network Row */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left Column: Recent Orders Box & Reward Status */}
           <div className="lg:col-span-8 space-y-6">
-            
-            {/* Purchase History / Recent Orders */}
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div>
@@ -375,7 +395,6 @@ export default function ClientDashboardPage() {
               )}
             </div>
 
-            {/* Reward Banner Card */}
             <div className="relative overflow-hidden bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white rounded-3xl p-6 sm:p-8 shadow-sm">
               <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                 <div className="space-y-2 max-w-md">
@@ -399,13 +418,9 @@ export default function ClientDashboardPage() {
                 </div>
               </div>
             </div>
-
           </div>
 
-          {/* Right Column: Shortcuts Grid, My Sponsor List & Tip */}
           <div className="lg:col-span-4 space-y-6">
-            
-            {/* Quick Action Shortcuts */}
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
               <div>
                 <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block">
@@ -456,7 +471,6 @@ export default function ClientDashboardPage() {
               </div>
             </div>
 
-            {/* My Sponsor List Network */}
             <div id="sponsor-list" className="bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
               <div>
                 <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block">
@@ -485,7 +499,6 @@ export default function ClientDashboardPage() {
               </div>
             </div>
 
-            {/* Tip Banner Card */}
             <div className="bg-slate-900 text-white p-6 rounded-3xl space-y-3 shadow-md">
               <span className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center font-black text-xs">
                 ✦
@@ -503,13 +516,10 @@ export default function ClientDashboardPage() {
                 Complete profile →
               </Link>
             </div>
-
           </div>
-
         </div>
 
       </main>
-
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
+import toast from "react-hot-toast";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -12,7 +13,7 @@ function CheckoutContent() {
   const buyId = searchParams.get("id");
   const buyTitle = searchParams.get("title");
   const buyPrice = searchParams.get("price");
-  const buyPoint = searchParams.get("point"); // Direct Buy point parameter
+  const buyPoint = searchParams.get("point");
 
   const isDirectBuy = Boolean(buyTitle && buyPrice);
 
@@ -20,17 +21,22 @@ function CheckoutContent() {
     name: "",
     phone: "",
     address: "",
-    paymentMethod: "cod", // 'cod', 'bkash', 'nagad'
+    paymentMethod: "cod",
     senderNumber: "",
     transactionId: "",
   });
 
   const [loading, setLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isOrderPlaced, setIsOrderPlaced] = useState(false);
 
-  // Auto-fill logged-in customer info if available in localStorage
   useEffect(() => {
     const savedUser = localStorage.getItem("bright_user");
-    if (savedUser) {
+    
+    if (!savedUser) {
+      toast.error("অর্ডার করার আগে অনুগ্রহ করে লগিন করুন।");
+      router.push("/login"); 
+    } else {
       try {
         const user = JSON.parse(savedUser);
         setFormData((prev) => ({
@@ -40,16 +46,16 @@ function CheckoutContent() {
         }));
       } catch (e) {
         console.error("User storage parse error", e);
+      } finally {
+        setIsCheckingAuth(false);
       }
     }
-  }, []);
+  }, [router]);
 
-  // 1. Calculate Total Items Count
   const totalItemCount = isDirectBuy
     ? 1
     : (cartItems || []).reduce((acc, item) => acc + (item.quantity || 1), 0);
 
-  // 2. Calculate Subtotal Price
   const subtotalPrice = isDirectBuy
     ? Number(buyPrice)
     : (cartItems || []).reduce(
@@ -57,7 +63,6 @@ function CheckoutContent() {
         0
       );
 
-  // 3. Calculate Total Reward Points
   const totalPoints = isDirectBuy
     ? Number(buyPoint || 0)
     : (cartItems || []).reduce(
@@ -65,35 +70,50 @@ function CheckoutContent() {
         0
       );
 
-  // 4. Calculate Delivery Charge (Free if 200 or more points, otherwise 120 Tk)
-  const deliveryCharge = totalPoints >= 200 ? 0 : 120;
-
-  // 5. Calculate Grand Total
+  const isOfficeReceive = formData.paymentMethod === "office_receive";
+  const deliveryCharge = isOfficeReceive ? 0 : totalPoints >= 200 ? 0 : 120;
   const totalAmount = subtotalPrice + deliveryCharge;
 
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.phone || !formData.address) {
-      alert("অনুগ্রহ করে আপনার নাম, মোবাইল নম্বর এবং সম্পূর্ণ ঠিকানা দিন।");
+    if (isOrderPlaced || loading) return;
+
+    if (!formData.name || !formData.phone) {
+      toast.error("অনুগ্রহ করে আপনার নাম ও মোবাইল নম্বর দিন।");
+      return;
+    }
+
+    if (!isOfficeReceive && !formData.address) {
+      toast.error("অনুগ্রহ করে আপনার সম্পূর্ণ ঠিকানা দিন।");
       return;
     }
 
     if (
       formData.paymentMethod !== "cod" &&
+      formData.paymentMethod !== "office_receive" &&
       (!formData.senderNumber || !formData.transactionId)
     ) {
-      alert("অনুগ্রহ করে সেন্ডার নম্বর এবং Transaction ID প্রদান করুন।");
+      toast.error("অনুগ্রহ করে সেন্ডার নম্বর এবং Transaction ID প্রদান করুন।");
       return;
     }
 
     setLoading(true);
+    const toastId = toast.loading("অর্ডার প্রসেস হচ্ছে...");
 
     try {
+      const savedUser = localStorage.getItem("bright_user");
+      let userId = null;
+      if (savedUser) {
+        const parsedUser = JSON.parse(savedUser);
+        userId = parsedUser.id || parsedUser._id;
+      }
+
       const orderPayload = {
+        userId: userId,
         customerName: formData.name,
         phone: formData.phone,
-        address: formData.address,
+        address: isOfficeReceive ? "অফিস রিসিভ (Office Pickup)" : formData.address,
         paymentMethod: formData.paymentMethod,
         paymentDetails: {
           senderNumber: formData.senderNumber,
@@ -119,26 +139,46 @@ function CheckoutContent() {
         createdAt: new Date(),
       };
 
-      const res = await fetch("/api/admin/orders", {
+      const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderPayload),
       });
 
       if (res.ok) {
-        alert("🎉 আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে!");
+        setIsOrderPlaced(true);
+        toast.success("🎉 আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে!", { id: toastId });
+        
         if (!isDirectBuy && clearCart) clearCart();
-        router.push("/client/orders");
+        
+        router.push("/client/orders"); 
       } else {
-        alert("অর্ডার জমা দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+        toast.error("অর্ডার জমা দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।", { id: toastId });
+        setLoading(false);
       }
     } catch (err) {
       console.error("Order submit error:", err);
-      alert("সার্ভারে সমস্যা হয়েছে।");
-    } finally {
+      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
       setLoading(false);
     }
   };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <p className="text-[#00875A] font-bold text-lg animate-pulse">লগিন স্ট্যাটাস যাচাই করা হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  if (isOrderPlaced) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-4">
+        <div className="text-5xl">✅</div>
+        <p className="text-[#00875A] font-bold text-xl">আপনার অর্ডারটি প্রসেস হচ্ছে, রিডাইরেক্ট করা হচ্ছে...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 font-sans text-gray-800 space-y-8">
@@ -153,7 +193,6 @@ function CheckoutContent() {
         onSubmit={handleSubmitOrder}
         className="grid grid-cols-1 md:grid-cols-12 gap-8"
       >
-        {/* Left Side: Address & Payment Method */}
         <div className="md:col-span-7 bg-white p-6 rounded-3xl border border-gray-200 shadow-sm space-y-6">
           <h2 className="text-sm font-extrabold text-gray-900 border-b pb-3">
             ১. শিপিং ঠিকানা
@@ -189,15 +228,21 @@ function CheckoutContent() {
             </div>
 
             <div>
-              <label className="font-bold block mb-1">সম্পূর্ণ ঠিকানা *</label>
+              <label className="font-bold block mb-1">
+                সম্পূর্ণ ঠিকানা {!isOfficeReceive && "*"}
+              </label>
               <textarea
-                required
+                required={!isOfficeReceive}
                 rows="3"
                 value={formData.address}
                 onChange={(e) =>
                   setFormData({ ...formData, address: e.target.value })
                 }
-                placeholder="বাসা নং, রোড নং, এলাকা, জেলা..."
+                placeholder={
+                  isOfficeReceive
+                    ? "অফিস রিসিভের ক্ষেত্রে ঠিকানার প্রয়োজন নেই (ঐচ্ছিক)"
+                    : "বাসা নং, রোড নং, এলাকা, জেলা..."
+                }
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
               />
             </div>
@@ -208,6 +253,27 @@ function CheckoutContent() {
           </h2>
 
           <div className="space-y-3">
+            <label
+              className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer ${
+                formData.paymentMethod === "office_receive"
+                  ? "border-[#00875A] bg-emerald-50/50"
+                  : "border-gray-200"
+              }`}
+            >
+              <input
+                type="radio"
+                name="payment"
+                value="office_receive"
+                checked={formData.paymentMethod === "office_receive"}
+                onChange={(e) =>
+                  setFormData({ ...formData, paymentMethod: e.target.value })
+                }
+              />
+              <span className="text-xs font-bold text-emerald-800">
+                🏢 অফিস রিসিভ (Office Pickup - চার্জ ৳০)
+              </span>
+            </label>
+
             <label
               className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer ${
                 formData.paymentMethod === "cod"
@@ -272,7 +338,7 @@ function CheckoutContent() {
             </label>
           </div>
 
-          {formData.paymentMethod !== "cod" && (
+          {(formData.paymentMethod === "bkash" || formData.paymentMethod === "nagad") && (
             <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl space-y-3 text-xs border border-slate-800">
               <p className="font-bold text-emerald-400">
                 📲 বিকাশ / নগদ সেন্ড মানি নম্বর:
@@ -304,7 +370,6 @@ function CheckoutContent() {
           )}
         </div>
 
-        {/* Right Side: Order Summary & Free Delivery Logic */}
         <div className="md:col-span-5 bg-white p-6 rounded-3xl border border-gray-200 shadow-sm h-fit space-y-4">
           <h2 className="text-sm font-extrabold text-gray-900 border-b pb-3">
             অর্ডার সামারি
@@ -317,26 +382,30 @@ function CheckoutContent() {
             </div>
 
             <div className="flex justify-between items-center">
-              <span>মোট অর্জিত পয়েন্ট</span>
+              <span>মোট অর্জিত পয়েন্ট</span>
               <span className="text-[#00875A] font-black bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                🌟 {totalPoints} পয়েন্ট
+                🌟 {totalPoints} পয়েন্ট
               </span>
             </div>
 
             <div className="flex justify-between items-center">
               <span>ডেলিভারি চার্জ</span>
-              {deliveryCharge === 0 ? (
+              {isOfficeReceive ? (
                 <span className="text-emerald-600 font-black bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                  🎉 ফ্রি (২০০+ পয়েন্ট অফার)
+                  🏢 ফ্রি (অফিস রিসিভ)
+                </span>
+              ) : deliveryCharge === 0 ? (
+                <span className="text-emerald-600 font-black bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                  🎉 ফ্রি (২০০+ পয়েন্ট অফার)
                 </span>
               ) : (
                 <span className="text-gray-900 font-bold">৳{deliveryCharge}</span>
               )}
             </div>
 
-            {totalPoints < 200 && (
+            {!isOfficeReceive && totalPoints < 200 && (
               <p className="text-[10px] text-amber-700 font-extrabold bg-amber-50 p-2.5 rounded-2xl border border-amber-200/80 leading-relaxed">
-                💡 টিপস: আপনার অর্ডারে ২০০ পয়েন্ট বা তার বেশি থাকলে ডেলিভারি চার্জ সম্পূর্ণ ফ্রি হয়ে যাবে! (বর্তমান পয়েন্ট: {totalPoints})
+                💡 টিপস: আপনার অর্ডারে ২০০ পয়েন্ট বা তার বেশি থাকলে ডেলিভারি চার্জ সম্পূর্ণ ফ্রি হয়ে যাবে! (বর্তমান পয়েন্ট: {totalPoints})
               </p>
             )}
           </div>
@@ -348,8 +417,12 @@ function CheckoutContent() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
+            disabled={loading || isOrderPlaced}
+            className={`w-full py-3.5 text-white font-black text-xs rounded-xl shadow-md transition-all ${
+              loading || isOrderPlaced 
+                ? "bg-gray-400 cursor-not-allowed" 
+                : "bg-[#00875A] hover:bg-[#00704A] cursor-pointer"
+            }`}
           >
             {loading ? "প্রসেস হচ্ছে..." : "✅ কনফার্ম অর্ডার করুন"}
           </button>
@@ -363,7 +436,7 @@ export default function CheckoutPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-10 text-center font-bold text-[#00875A]">
+        <div className="p-10 text-center font-bold text-[#00875A] animate-pulse">
           Loading Checkout...
         </div>
       }

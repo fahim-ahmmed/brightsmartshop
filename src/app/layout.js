@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import Footer from "@/components/layout/Footer";
 import { CartProvider } from "@/context/CartContext";
+import { Toaster } from "react-hot-toast";
 
 export default function RootLayout({ children }) {
   const pathname = usePathname();
@@ -18,6 +19,8 @@ export default function RootLayout({ children }) {
           {!isAdminPage && <SiteHeader />}
           <main>{children}</main>
           {!isAdminPage && <Footer />}
+          {/* টোস্ট নোটিফিকেশন কম্পোনেন্ট */}
+          <Toaster position="top-center" reverseOrder={false} />
         </CartProvider>
       </body>
     </html>

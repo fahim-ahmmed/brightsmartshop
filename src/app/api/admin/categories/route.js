@@ -1,0 +1,84 @@
+import { NextResponse } from "next/server";
+import clientPromise from "@/lib/mongo-client";
+
+// সমস্ত ক্যাটাগরি ও সাব-ক্যাটাগরি ফেচ করার GET মেথড
+export async function GET() {
+  try {
+    const client = await clientPromise;
+    const db = client.db();
+    const categories = await db.collection("categories").find({}).sort({ createdAt: -1 }).toArray();
+
+    return NextResponse.json({ success: true, categories });
+  } catch (error) {
+    console.error("Fetch categories error:", error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+// নতুন ক্যাটাগরি বা সাব-ক্যাটাগরি তৈরি করার POST মেথড
+export async function POST(req) {
+  try {
+    const body = await req.json();
+    const { name, parentCategory, slug, icon } = body;
+
+    if (!name) {
+      return NextResponse.json({ success: false, message: "Category name is required" }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db();
+    const collection = db.collection("categories");
+
+    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
+    const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+
+    // চেক করা এই নামে অলরেডি কোনো ক্যাটাগরি আছে কি না
+    const existing = await collection.findOne({ slug: categorySlug });
+    if (existing) {
+      return NextResponse.json({ success: false, message: "This category already exists!" }, { status: 400 });
+    }
+
+    const newCategory = {
+      name,
+      slug: categorySlug,
+      parentCategory: parentCategory || "Main", // "Main" হলে মেইন ক্যাটাগরি, না হলে প্যারেন্টের নাম সাব-ক্যাটাগরি হিসেবে থাকবে
+      icon: icon || "📁",
+      createdAt: new Date(),
+    };
+
+    const result = await collection.insertOne(newCategory);
+
+    return NextResponse.json({
+      success: true,
+      message: "Category created permanently!",
+      categoryId: result.insertedId,
+      category: newCategory,
+    });
+  } catch (error) {
+    console.error("Create category error:", error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+// ক্যাটাগরি ডিলিট করার DELETE মেথড
+export async function DELETE(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ success: false, message: "Category ID is required" }, { status: 400 });
+    }
+
+    const { ObjectId } = require("mongodb");
+    const client = await clientPromise;
+    const db = client.db();
+
+    await db.collection("categories").deleteOne({ _id: new ObjectId(id) });
+
+    return NextResponse.json({ success: true, message: "Category deleted successfully!" });
+  } catch (error) {
+    console.error("Delete category error:", error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}

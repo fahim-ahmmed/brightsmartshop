@@ -18,7 +18,6 @@ export default function AdminLoginPage() {
     setErrorMsg("");
 
     const inputVal = identifier.trim();
-    // যদি ইনপুটে @ না থাকে তবে সেটিকে মোবাইল ধরে ডায়নামিক ইমেইল বানাবে
     const targetEmail = inputVal.includes("@")
       ? inputVal.toLowerCase()
       : `${inputVal}@brightsmartshop.local`;
@@ -30,21 +29,24 @@ export default function AdminLoginPage() {
       });
 
       if (res?.error) {
-        setErrorMsg(res.error.message || "ইমেইল/মোবাইল বা পাসওয়ার্ড ভুল দেওয়া হয়েছে!");
+        setErrorMsg(res.error.message || "ইমেইল/মোবাইল বা পাসওয়ার্ড ভুল দেওয়া হয়েছে!");
         setLoading(false);
         return;
       }
 
-      // সফল লগইনের পর সেসন লোকালস্টোরেজে রিফ্রেশ
       if (res?.data?.user) {
         localStorage.setItem("bright_user", JSON.stringify(res.data.user));
       }
 
-      // এডমিন বা সাব-এডমিন রিডাইরেক্ট
-      window.location.href = "/admin";
+      // পার্মানেন্ট লগইনের জন্য localStorage ও কুকি সেট করা হলো
+      localStorage.setItem("admin_logged_in", "true");
+      document.cookie = "admin_session=active; path=/; max-age=86400;";
+
+      // 🟢 সফল লগইনের পর সরাসরি সিক্রেট এডমিন প্যানেলে রিডাইরেক্ট করবে
+      window.location.href = "/219192026";
     } catch (err) {
       console.error("Admin Login Failed:", err);
-      setErrorMsg("সার্ভারে সমস্যা হয়েছে! অনুগ্রহ করে আবার চেষ্টা করুন।");
+      setErrorMsg("সার্ভারে সমস্যা হয়েছে! অনুগ্রহ করে আবার চেষ্টা করুন।");
       setLoading(false);
     }
   };
@@ -69,7 +71,7 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        {/* Role Selector Tabs (Customer রিমুভ করা হয়েছে) */}
+        {/* Role Selector Tabs */}
         <div className="grid grid-cols-2 gap-1.5 bg-[#0F172A] p-1.5 rounded-2xl border border-slate-800">
           <button
             type="button"
@@ -106,7 +108,7 @@ export default function AdminLoginPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300 block">সিক্রেট পাসওয়ার্ড *</label>
+            <label className="text-xs font-bold text-slate-300 block">সিক্রেট পাসওয়ার্ড *</label>
             <input
               type="password"
               value={password}

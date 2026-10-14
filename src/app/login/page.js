@@ -49,22 +49,17 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-gray-800">
       <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-gray-200/80 shadow-2xl space-y-6">
         
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-[#00875A] text-white font-black flex items-center justify-center text-sm shadow-md">
-              bss
-            </div>
-            <span className="font-serif font-black text-2xl text-[#00875A]">
+        <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+            <img
+              src="/logo.jpg"
+              alt="Bright Smart Shop Logo"
+              className="h-10 sm:h-12 w-auto object-contain rounded-xl group-hover:scale-105 transition-transform"
+            />
+            <span className="font-serif font-black text-lg sm:text-2xl text-[#00875A] tracking-tight">
               Bright Smart Shop
             </span>
           </Link>
-          <h1 className="text-xl font-black text-gray-900 pt-2">
-            লগইন করুন
-          </h1>
-          <p className="text-xs text-gray-500">
-            আপনার মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে অ্যাকাউন্টে প্রবেশ করুন
-          </p>
-        </div>
+
 
         {errorMsg && (
           <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold p-3.5 rounded-2xl text-center shadow-2xs">
@@ -75,7 +70,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
             <label className="font-bold text-gray-700 block mb-1">
-              মোবাইল নম্বর / ইমেইল *
+              মোবাইল নম্বর *
             </label>
             <input
               type="text"

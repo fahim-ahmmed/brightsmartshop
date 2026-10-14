@@ -59,18 +59,22 @@ export default function DemoProductGrid({ title = "Category Featured Products", 
               </h3>
             </div>
 
-            {/* Bottom Price & Add to Cart Button */}
+            {/* Price & Reward Points Row (প্রাইসের বামপাশে রিওয়ার্ড পয়েন্ট - শুধু সংখ্যা ও 'পয়েন্ট') */}
             <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between gap-2">
-              <div>
+              
+              <div className="flex items-center gap-1 bg-amber-500/10 text-amber-700 px-2 py-1 rounded-lg border border-amber-500/20">
+                <span className="text-xs font-black">+{p.points} পয়েন্ট</span>
+              </div>
+
+              <div className="text-right">
                 <div className="text-lg font-black text-gray-900">
                   ৳ {p.price}
                 </div>
-                <div className="text-[10px] text-amber-600 font-extrabold flex items-center gap-1">
-                  <span>✨</span>
-                  <span>+{p.points} Cashback Pts</span>
-                </div>
               </div>
+            </div>
 
+            {/* Add to Cart Button */}
+            <div className="mt-3">
               <button
                 type="button"
                 onClick={() =>
@@ -81,11 +85,12 @@ export default function DemoProductGrid({ title = "Category Featured Products", 
                     points: p.points,
                   })
                 }
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <span>+ Add</span>
+                <span>+ Add to Cart</span>
               </button>
             </div>
+
           </div>
         ))}
       </div>
