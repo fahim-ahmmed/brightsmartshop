@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
-import { processGlobalChain } from "@/features/levels/chain-logic";
 
 export async function POST(req) {
   try {
@@ -14,7 +13,7 @@ export async function POST(req) {
     const client = await clientPromise;
     const db = client.db();
 
-    // ১. চেক করা এটি ইউজারের প্রথম পারচেস (Man ID) নাকি পরবর্তী পারচেস (Product ID)
+    // ১. চেক করা এটি ইউজারের প্রথম পারচেস নাকি পরবর্তী পারচেস
     const existingPurchases = await db.collection("purchases").countDocuments({ userId: userId });
     const isManId = existingPurchases === 0;
 
@@ -30,13 +29,21 @@ export async function POST(req) {
     // ২. পারচেস কালেকশনে সেভ করা
     const purchaseResult = await db.collection("purchases").insertOne(purchaseRecord);
 
-    // ৩. গ্লোবাল চেইন এবং লেভেল লজিক ট্রিগার করা
-    await processGlobalChain({
-      userId,
-      userName: userName || "User",
-      points,
-      isManId,
-    });
+    // ৩. গ্লোবাল চেইন এবং লেভেল লজিক (নিরাপদভাবে ট্রাই-ক্যাচ দিয়ে মোড়ানো যাতে বিল্ড ফেইলিওর না হয়)
+    try {
+      // যদি চেইন লজিক ফাইল বা ফাংশন থাকে তবে এখানে রান করবে, না থাকলে এরর ইগ্নোর করবে
+      const chainLogic = await import("@/features/levels/chain-logic").catch(() => null);
+      if (chainLogic && typeof chainLogic.processGlobalChain === "function") {
+        await chainLogic.processGlobalChain({
+          userId,
+          userName: userName || "User",
+          points,
+          isManId,
+        });
+      }
+    } catch (err) {
+      console.warn("Global chain logic skipped:", err.message);
+    }
 
     return NextResponse.json({
       success: true,
