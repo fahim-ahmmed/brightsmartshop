@@ -38,26 +38,39 @@ export default function AdminOrdersPage() {
       });
 
       if (res.ok) {
-        alert(`অর্ডার সফলভাবে '${newStatus}' করা হয়েছে!`);
+        alert(`অর্ডার সফলভাবে '${newStatus}' করা হয়েছে!`);
         fetchAllOrders(); // সাথে সাথে ডাটা রিফ্রেশ হবে
       } else {
-        alert("স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।");
+        alert("স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।");
       }
     } catch (e) {
-      alert("নেটওয়ার্ক সমস্যা!");
+      alert("নেটওয়ার্ক সমস্যা!");
     }
   };
 
   return (
     <main className="p-4 sm:p-8 font-sans text-gray-800 space-y-6 bg-gray-50 min-h-screen">
+      
+      {/* Top Header with PDF Download Button */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-5 bg-white p-6 rounded-3xl shadow-sm">
         <div>
           <h1 className="text-2xl font-black text-gray-900">অর্ডার ম্যানেজমেন্ট</h1>
           <p className="text-xs font-bold text-gray-500 mt-1">সব কাস্টমারের অর্ডারের তালিকা ও স্ট্যাটাস আপডেট করুন</p>
         </div>
-        <button onClick={fetchAllOrders} className="bg-[#00875A] hover:bg-[#00704A] text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition-all">
-          🔄 রিফ্রেশ তালিকা
-        </button>
+        
+        <div className="flex items-center gap-3">
+          {/* PDF Download Button */}
+          <button 
+            onClick={() => window.print()} 
+            className="no-print bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <span>📄</span> Download Orders PDF
+          </button>
+
+          <button onClick={fetchAllOrders} className="no-print bg-[#00875A] hover:bg-[#00704A] text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition-all cursor-pointer">
+            🔄 রিফ্রেশ তালিকা
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -106,29 +119,29 @@ export default function AdminOrdersPage() {
                 <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
                   {(ord.items || []).map((item, i) => (
                     <div key={i} className="flex justify-between font-bold text-gray-600">
-                      <span>• {item.title} (x{item.quantity || 1})</span>
+                      <span>{item.title} (x{item.quantity || 1})</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* 🎯 এডমিন একশন বাটনসমূহ */}
-              <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+              <div className="no-print flex flex-wrap gap-2 pt-3 border-t border-gray-100">
                 <button
                   onClick={() => handleUpdateStatus(ord.orderId, "Paid")}
-                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-xs rounded-xl transition-all"
+                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
                   ✅ Paid
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(ord.orderId, "Delivered")}
-                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-xs rounded-xl transition-all"
+                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
                   📦 Delivered
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(ord.orderId, "Cancelled")}
-                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-xs rounded-xl transition-all"
+                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
                   ❌ Cancel
                 </button>
@@ -140,7 +153,7 @@ export default function AdminOrdersPage() {
       ) : (
         <div className="bg-white p-16 rounded-3xl text-center border shadow-sm space-y-3">
           <div className="text-5xl">📭</div>
-          <p className="text-sm font-bold text-gray-500">কোনো অর্ডার পাওয়া যায়নি</p>
+          <p className="text-sm font-bold text-gray-500">কোনো অর্ডার পাওয়া যায়নি</p>
         </div>
       )}
     </main>

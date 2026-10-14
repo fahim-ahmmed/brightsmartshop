@@ -3,12 +3,31 @@
 @tailwind utilities;
 
 html {
-  /* sticky header-এর নিচে anchor লুকিয়ে না যায় */
   scroll-padding-top: 6rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+}
+
+/* 🟢 PDF Print Optimization */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  /* প্রিন্ট করার সময় বাটন, সাইডবার ও নেভিগেশন হাইড থাকবে */
+  aside, nav, .no-print {
+    display: none !important;
+  }
+
+  main {
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
   }
 }
