@@ -14,11 +14,11 @@ export default function HomePage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 2 Hero Slider Images from public folder
-  const heroImages = ["/hero1.jpg", "/hero2.jpg"];
+  // 🟢 Dynamic Hero Banners State from MongoDB
+  const [heroBanners, setHeroBanners] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Fetch Live Products from MongoDB API
+  // Fetch Live Products & Hero Banners from MongoDB API
   useEffect(() => {
     async function fetchLiveProducts() {
       try {
@@ -33,17 +33,41 @@ export default function HomePage() {
         setLoading(false);
       }
     }
+
+    async function fetchHeroBanners() {
+      try {
+        const res = await fetch("/api/admin/banners", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          // শুধুমাত্র Active ব্যানারগুলো ফিল্টার করে সেট করা হচ্ছে
+          const activeBanners = (data.banners || []).filter((b) => b.isActive);
+          setHeroBanners(activeBanners);
+        }
+      } catch (err) {
+        console.error("Failed to load hero banners on home page:", err);
+      }
+    }
+
     fetchLiveProducts();
+    fetchHeroBanners();
   }, []);
+
+  // 🟢 Fallback to default images if no active dynamic banners are in database
+  const displayBanners = heroBanners.length > 0
+    ? heroBanners
+    : [
+        { image: "/hero1.jpg", link: "/shop", title: "Hero Banner 1" },
+        { image: "/hero2.jpg", link: "/shop", title: "Hero Banner 2" },
+      ];
 
   // Auto Slide Change between images (Every 4 Seconds)
   useEffect(() => {
-    if (heroImages.length === 0) return;
+    if (displayBanners.length === 0) return;
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % heroImages.length);
+      setCurrentSlide((prev) => (prev + 1) % displayBanners.length);
     }, 4000);
     return () => clearInterval(timer);
-  }, [heroImages.length]);
+  }, [displayBanners.length]);
 
   // Handle Pure Add to Cart Action (No Redirects)
   const handleAddToCartOnly = (product) => {
@@ -251,38 +275,42 @@ export default function HomePage() {
       {/* MAIN BODY CONTENT */}
       <main className="w-full space-y-12 py-8">
         
-        {/* 2. FULL VIEW HERO SLIDER BANNER */}
+        {/* 2. FULL VIEW HERO SLIDER BANNER (DYNAMIC FROM MONGODB) */}
         <section className="max-w-[1400px] mx-auto px-4 sm:px-8">
           <div className="relative w-full h-[240px] sm:h-[380px] md:h-[460px] lg:h-[520px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-white">
             
-            {heroImages.map((img, index) => (
+            {displayBanners.map((banner, index) => (
               <div
-                key={index}
+                key={banner._id || index}
                 className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
                   index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"
                 }`}
               >
-                <img
-                  src={img}
-                  alt={`Hero Banner ${index + 1}`}
-                  className="w-full h-full object-contain bg-white"
-                />
+                <Link href={banner.link || "/shop"}>
+                  <img
+                    src={banner.image}
+                    alt={banner.title || `Hero Banner ${index + 1}`}
+                    className="w-full h-full object-contain bg-white cursor-pointer"
+                  />
+                </Link>
               </div>
             ))}
 
             {/* Slider Dots */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/20 backdrop-blur-xs px-3 py-1 rounded-full">
-              {heroImages.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentSlide(i)}
-                  className={`h-2.5 rounded-full transition-all cursor-pointer ${
-                    i === currentSlide ? "bg-[#00875A] w-6" : "bg-white/80 w-2.5"
-                  }`}
-                  aria-label={`Slide ${i + 1}`}
-                />
-              ))}
-            </div>
+            {displayBanners.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/20 backdrop-blur-xs px-3 py-1 rounded-full">
+                {displayBanners.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentSlide(i)}
+                    className={`h-2.5 rounded-full transition-all cursor-pointer ${
+                      i === currentSlide ? "bg-[#00875A] w-6" : "bg-white/80 w-2.5"
+                    }`}
+                    aria-label={`Slide ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
 
           </div>
         </section>
@@ -351,80 +379,87 @@ export default function HomePage() {
             </div>
           ) : products.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-              {products.map((p) => (
-                <div
-                  key={p._id || p.id}
-                  className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
-                >
-                  {p.originalPrice > p.price && (
-                    <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10">
-                      SAVE ৳{p.originalPrice - p.price}
-                    </span>
-                  )}
+              {products.map((p) => {
+                const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
+                const sellPrice = Number(p.price || 0);
+                const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
 
-                  {/* Image */}
-                  <div className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/80 transition-colors">
-                    <img
-                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
-                      alt={p.title}
-                      className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-
-                  {/* Title, Category & Unit */}
-                  <div className="space-y-1 mb-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                        {p.category || "General"}
+                return (
+                  <div
+                    key={p._id || p.id}
+                    className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+                  >
+                    {/* 🔴 SAVE Badge */}
+                    {saveAmount > 0 && (
+                      <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                        SAVE ৳{saveAmount}
                       </span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                        📦 {p.unit || p.weight || "1 Pcs"}
-                      </span>
-                    </div>
-                    <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
-                      {p.title}
-                    </h3>
-                  </div>
+                    )}
 
-                  {/* 3 Items in 1 Line: Price (Left) & Points (Right) */}
-                  <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                    
-                    {/* বামপাশে প্রাইস ও অরিজিনাল প্রাইস (এক লাইনে) */}
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base font-black text-gray-900">৳{p.price}</span>
-                      {p.originalPrice > p.price && (
-                        <span className="text-[11px] text-gray-400 line-through font-bold">৳{p.originalPrice}</span>
-                      )}
+                    {/* Image */}
+                    <div className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/80 transition-colors">
+                      <img
+                        src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                        alt={p.title}
+                        className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
+                      />
                     </div>
 
-                    {/* ডানপাশে পয়েন্ট (এক লাইনে) */}
-                    <span className="text-xs font-bold text-gray-700">
-                      +{p.points || p.point || 0} Points
-                    </span>
+                    {/* Title, Category & Unit */}
+                    <div className="space-y-1 mb-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                          {p.category || "General"}
+                        </span>
+                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                          📦 {p.unit || p.weight || "1 Pcs"}
+                        </span>
+                      </div>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
+                        {p.title}
+                      </h3>
+                    </div>
+
+                    {/* Price (Left) & Points (Right) Row */}
+                    <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
+                      
+                      {/* সেলিং প্রাইস ও কাটা ডিসকাউন্ট প্রাইস */}
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
+                        {saveAmount > 0 && (
+                          <span className="text-[11px] text-gray-400 line-through font-bold">৳{oldPrice}</span>
+                        )}
+                      </div>
+
+                      {/* পয়েন্ট */}
+                      <span className="text-xs font-bold text-gray-700">
+                        +{p.points || p.point || 0} Points
+                      </span>
+
+                    </div>
+
+                    {/* Buy Now & Cart Buttons */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddToCartOnly(p)}
+                        className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                      >
+                        🛒 Cart
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBuyNow(p)}
+                        className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
+                      >
+                        ⚡ Buy Now
+                      </button>
+                    </div>
 
                   </div>
-
-                  {/* Buy Now & Cart Buttons */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCartOnly(p)}
-                      className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                    >
-                      🛒 Cart
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleBuyNow(p)}
-                      className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
-                    >
-                      ⚡ Buy Now
-                    </button>
-                  </div>
-
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-2xs">

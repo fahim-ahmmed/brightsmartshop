@@ -344,7 +344,7 @@ function CheckoutContent() {
                 📲 বিকাশ / নগদ সেন্ড মানি নম্বর:
               </p>
               <div className="bg-slate-800 p-2.5 rounded-xl text-center text-sm font-black text-amber-400 font-mono">
-                01305470835
+                01727629513
               </div>
               <div className="space-y-2 pt-1">
                 <input

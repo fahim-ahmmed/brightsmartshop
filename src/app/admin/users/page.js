@@ -8,6 +8,17 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // 🟢 ইডিট মোডাল এর জন্য স্টেটসমূহ
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({
+    userId: "",
+    name: "",
+    phone: "",
+    password: "",
+    role: "Customer",
+  });
+  const [updating, setUpdating] = useState(false);
+
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
@@ -19,12 +30,12 @@ export default function AdminUsersPage() {
         setUsers(userList);
       } else {
         setError("Failed to fetch users from server.");
-        toast.error("ইউজার ডাটা ফেচ করতে ব্যর্থ হয়েছে!");
+        toast.error("ইউজার ডাটা ফেচ করতে ব্যর্থ হয়েছে!");
       }
     } catch (err) {
       console.error("Users loading error:", err);
       setError("Network or API endpoint issue.");
-      toast.error("নেটওয়ার্ক সমস্যা!");
+      toast.error("নেটওয়ার্ক সমস্যা!");
     } finally {
       setLoading(false);
     }
@@ -34,7 +45,49 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, []);
 
-  // ব্রাউজার ডিফল্ট পপ-আপ বাদ দিয়ে সরাসরি টোস্ট ও ডিলিট রিকোয়েস্ট
+  // 🟢 ১. ইডিট মোডাল ওপেন করা
+  const handleOpenEditModal = (user) => {
+    setEditingUser(user);
+    setEditForm({
+      userId: user._id || user.id,
+      name: user.name || "",
+      phone: getDisplayPhone(user),
+      password: user.password || user.rawPassword || "",
+      role: user.role || "Customer",
+    });
+  };
+
+  // 🟢 ২. ইডিট ফর্ম সাবমিট করা
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    setUpdating(true);
+    const toastId = toast.loading("ইউজারের তথ্য আপডেট হচ্ছে...");
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success(data.message || "তথ্য সফলভাবে আপডেট করা হয়েছে!", { id: toastId });
+        setEditingUser(null);
+        fetchUsers(); // ইউজার লিস্ট সাথে সাথে রিফ্রেশ হবে
+      } else {
+        toast.error(data.message || "আপডেট করতে সমস্যা হয়েছে।", { id: toastId });
+      }
+    } catch (err) {
+      console.error("Update error:", err);
+      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // ৩. ডিলিট ইউজার হ্যান্ডলার
   const handleDeleteUser = async (userId, userName) => {
     const toastId = toast.loading(`"${userName || "এই ইউজার"}" ডিলিট হচ্ছে...`);
 
@@ -47,13 +100,13 @@ export default function AdminUsersPage() {
 
       if (res.ok) {
         setUsers(users.filter((u) => (u._id || u.id) !== userId));
-        toast.success("ইউজার সফলভাবে ডিলিট করা হয়েছে!", { id: toastId });
+        toast.success("ইউজার সফলভাবে ডিলিট করা হয়েছে!", { id: toastId });
       } else {
-        toast.error(data.message || "ইউজার ডিলিট করতে সমস্যা হয়েছে।", { id: toastId });
+        toast.error(data.message || "ইউজার ডিলিট করতে সমস্যা হয়েছে।", { id: toastId });
       }
     } catch (err) {
       console.error("Delete user error:", err);
-      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
+      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
     }
   };
 
@@ -81,7 +134,7 @@ export default function AdminUsersPage() {
           <button
             onClick={() => {
               fetchUsers();
-              toast.success("ইউজার লিস্ট রিফ্রেশ করা হয়েছে!");
+              toast.success("ইউজার লিস্ট রিফ্রেশ করা হয়েছে!");
             }}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
           >
@@ -147,13 +200,24 @@ export default function AdminUsersPage() {
                       <td className="py-3 text-slate-400 font-mono">
                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "Recent"}
                       </td>
+                      
+                      {/* Action Buttons */}
                       <td className="py-3 text-right">
-                        <button
-                          onClick={() => handleDeleteUser(uid, u.name)}
-                          className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-[11px] rounded-xl transition-all cursor-pointer border border-rose-500/20"
-                        >
-                          ডিলিট
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEditModal(u)}
+                            className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[11px] rounded-xl transition-all cursor-pointer border border-emerald-500/20 flex items-center gap-1"
+                          >
+                            <span>✏️</span> ইডিট
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteUser(uid, u.name)}
+                            className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-[11px] rounded-xl transition-all cursor-pointer border border-rose-500/20"
+                          >
+                            ডিলিট
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -166,11 +230,104 @@ export default function AdminUsersPage() {
             <div className="text-4xl">👥</div>
             <h3 className="text-sm font-bold text-white">No Users Found</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              কোনো রেজিস্টার্ড ইউজার পাওয়া যায়নি।
+              কোনো রেজিস্টার্ড ইউজার পাওয়া যায়নি।
             </p>
           </div>
         )}
       </div>
+
+      {/* 🟢 EDIT USER POPUP MODAL */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl space-y-6 relative">
+            
+            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <span>✏️</span> ইউজার তথ্য সম্পাদনা করুন
+              </h3>
+              <button
+                onClick={() => setEditingUser(null)}
+                className="text-slate-400 hover:text-white font-bold text-lg p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} className="space-y-4">
+              
+              {/* Name */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">ইউজার নাম (User Name) *</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+                  required
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">মোবাইল নম্বর (Mobile Number) *</label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold font-mono"
+                  required
+                />
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">পাসওয়ার্ড (Password)</label>
+                <input
+                  type="text"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-amber-300 focus:outline-none focus:border-emerald-500 font-mono"
+                  placeholder="নতুন পাসওয়ার্ড দিন"
+                />
+              </div>
+
+              {/* Role */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">অ্যাকাউন্ট রোল (Role)</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold cursor-pointer"
+                >
+                  <option value="Customer">Customer</option>
+                  <option value="sub-admin">Sub-Admin</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-3 border-t border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer"
+                >
+                  {updating ? "আপডেট হচ্ছে..." : "💾 সেভ করুন"}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -25,6 +25,7 @@ export default function AdminProductsPage() {
     category: clientCategories[0],
     price: "",
     originalPrice: "",
+    discountPrice: "", // 🟢 আগের দাম / কাটা দামের ফিল্ড
     points: 0, // অটোমেটিক হিসেব হবে
     unit: "1 Pcs",
     stock: "",
@@ -33,7 +34,7 @@ export default function AdminProductsPage() {
 
   const [imagePreview, setImagePreview] = useState("");
 
-  // 🟢 ১. অটোমেটিক রিওয়ার্ড পয়েন্ট ক্যালকুলেশন (Profit / 2.25)
+  // 🟢 ১. অটোমেটিক রিওয়ার্ড পয়েন্ট ক্যালকুলেশন (Profit / 2.25)
   useEffect(() => {
     const sellPrice = parseFloat(form.price) || 0;
     const buyPrice = parseFloat(form.originalPrice) || 0;
@@ -99,7 +100,8 @@ export default function AdminProductsPage() {
         ...form,
         price: Number(form.price),
         originalPrice: Number(form.originalPrice || form.price),
-        buyingPrice: Number(form.originalPrice || 0), // ডাটাবেজে বাইং প্রাইস সেভ হবে
+        costPrice: Number(form.originalPrice || 0), // ব্যাকএন্ডে বাইং প্রাইস পাঠানো হচ্ছে
+        discountPrice: Number(form.discountPrice || 0), // 🟢 ডাটাবেসে ডিসকাউন্ট প্রাইস পাঠানো হচ্ছে
         points: Number(form.points || 0),
         unit: form.unit || "1 Pcs",
         stock: Number(form.stock || 10),
@@ -121,6 +123,7 @@ export default function AdminProductsPage() {
           category: clientCategories[0],
           price: "",
           originalPrice: "",
+          discountPrice: "", // 🟢 ফর্ম রিসেট
           points: 0,
           unit: "1 Pcs",
           stock: "",
@@ -248,6 +251,22 @@ export default function AdminProductsPage() {
             />
           </div>
 
+          {/* 🟢 Discount Price Field (আগের দাম / কাটা দাম) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300">
+              Discount Price (৳) [আগের দাম/কাটা দাম]
+            </label>
+            <input
+              type="number"
+              value={form.discountPrice}
+              onChange={(e) =>
+                setForm({ ...form, discountPrice: e.target.value })
+              }
+              placeholder="e.g. 600"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-bold"
+            />
+          </div>
+
           {/* 🌟 Auto Calculated Reward Points Field */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-amber-400 flex items-center gap-1">
@@ -290,7 +309,7 @@ export default function AdminProductsPage() {
             />
           </div>
 
-          <div className="space-y-1.5 lg:col-span-3">
+          <div className="space-y-1.5 lg:col-span-2">
             <label className="text-xs font-bold text-slate-300">
               Local Image File
             </label>
@@ -371,9 +390,18 @@ export default function AdminProductsPage() {
                     <h4 className="font-bold text-xs text-white line-clamp-1">
                       {p.title}
                     </h4>
-                    <p className="text-[10px] text-emerald-400 font-bold">
-                      {p.category} | ৳{p.price}
-                    </p>
+                    
+                    {/* 🟢 প্রাইস এবং কাটা ডিসকাউন্ট প্রাইস */}
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold mt-0.5">
+                      <span className="text-emerald-400">৳{p.price}</span>
+                      {p.discountPrice > 0 && (
+                        <span className="text-slate-400 line-through text-[10px]">
+                          ৳{p.discountPrice}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-500">| {p.category}</span>
+                    </div>
+
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 font-bold">
                         🌟 +{p.points || p.point || 0} Pts

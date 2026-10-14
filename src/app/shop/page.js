@@ -59,7 +59,6 @@ function ShopContent() {
     return prodCategory.includes(query);
   });
 
-  // Pure Add to Cart Action (No Redirects to /cart)
   const handleAddToCartOnly = (product) => {
     addToCart({
       id: product._id || product.id,
@@ -71,7 +70,6 @@ function ShopContent() {
     });
   };
 
-  // Safe Direct Buy Now Action
   const handleBuyNow = (product) => {
     const params = new URLSearchParams({
       id: product._id || product.id || "",
@@ -128,80 +126,87 @@ function ShopContent() {
         </div>
       ) : filteredProducts.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-          {filteredProducts.map((p) => (
-            <div
-              key={p._id || p.id}
-              className="bg-white rounded-3xl p-4 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
-            >
-              {p.originalPrice > p.price && (
-                <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10">
-                  SAVE ৳{p.originalPrice - p.price}
-                </span>
-              )}
+          {filteredProducts.map((p) => {
+            const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
+            const sellPrice = Number(p.price || 0);
+            const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
 
-              {/* Image */}
-              <div className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100 transition-colors">
-                <img
-                  src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
-                  alt={p.title}
-                  className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-
-              {/* Title, Category & Unit */}
-              <div className="space-y-1 mb-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                    {p.category || "General"}
+            return (
+              <div
+                key={p._id || p.id}
+                className="bg-white rounded-3xl p-4 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+              >
+                {/* 🔴 SAVE Badge */}
+                {saveAmount > 0 && (
+                  <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                    SAVE ৳{saveAmount}
                   </span>
-                  <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                    📦 {p.unit || p.weight || "1 Pcs"}
-                  </span>
-                </div>
-                <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
-                  {p.title}
-                </h3>
-              </div>
+                )}
 
-              {/* 3 Items in 1 Line: Price (Left) & Points (Right) */}
-              <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                
-                {/* বামপাশে প্রাইস ও অরিজিনাল প্রাইস (এক লাইনে) */}
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-base font-black text-gray-900">৳{p.price}</span>
-                  {p.originalPrice > p.price && (
-                    <span className="text-[11px] text-gray-400 line-through font-bold">৳{p.originalPrice}</span>
-                  )}
+                {/* Image */}
+                <div className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100 transition-colors">
+                  <img
+                    src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                    alt={p.title}
+                    className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
+                  />
                 </div>
 
-                {/* ডানপাশে পয়েন্ট (এক লাইনে) */}
-                <span className="text-xs font-bold text-gray-700">
-                  +{p.points || p.point || 0} Points
-                </span>
+                {/* Title, Category & Unit */}
+                <div className="space-y-1 mb-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                      {p.category || "General"}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                      📦 {p.unit || p.weight || "1 Pcs"}
+                    </span>
+                  </div>
+                  <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
+                    {p.title}
+                  </h3>
+                </div>
+
+                {/* Price (Left) & Points (Right) Row */}
+                <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
+                  
+                  {/* সেলিং প্রাইস ও কাটা ডিসকাউন্ট প্রাইস */}
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
+                    {saveAmount > 0 && (
+                      <span className="text-[11px] text-gray-400 line-through font-bold">৳{oldPrice}</span>
+                    )}
+                  </div>
+
+                  {/* পয়েন্ট */}
+                  <span className="text-xs font-bold text-gray-700">
+                    +{p.points || p.point || 0} Points
+                  </span>
+
+                </div>
+
+                {/* Buy Now & Add to Cart Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAddToCartOnly(p)}
+                    className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                  >
+                    🛒 Cart
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBuyNow(p)}
+                    className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
+                  >
+                    ⚡ Buy Now
+                  </button>
+                </div>
 
               </div>
-
-              {/* Buy Now & Add to Cart Buttons */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleAddToCartOnly(p)}
-                  className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                >
-                  🛒 Cart
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleBuyNow(p)}
-                  className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
-                >
-                  ⚡ Buy Now
-                </button>
-              </div>
-
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-20 bg-white rounded-3xl border border-gray-200 space-y-3">

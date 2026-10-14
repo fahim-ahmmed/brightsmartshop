@@ -36,7 +36,11 @@ export default function SiteHeader() {
 
     updateUserFromStorage();
     window.addEventListener("storage", updateUserFromStorage);
-    return () => window.removeEventListener("storage", updateUserFromStorage);
+    window.addEventListener("userUpdated", updateUserFromStorage);
+    return () => {
+      window.removeEventListener("storage", updateUserFromStorage);
+      window.removeEventListener("userUpdated", updateUserFromStorage);
+    };
   }, []);
 
   // Close dropdown on outside click
@@ -50,8 +54,8 @@ export default function SiteHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Priority: Better Auth Session User -> LocalStorage User
-  const currentUser = session?.user || localUser;
+  // Priority: LocalStorage User (if edited) -> Better Auth Session User
+  const currentUser = localUser || session?.user;
 
   const {
     cartItems = [],
@@ -89,7 +93,7 @@ export default function SiteHeader() {
   const defaultHumanAvatar =
     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
 
-  // 🎯 মোট রিওয়ার্ড পয়েন্ট হিসেব
+  // 🎯 মোট রিওয়ার্ড পয়েন্ট হিসেব
   const totalPoints = cartItems.reduce((acc, item) => {
     const pts = Number(item.points || item.point || item.rewardPoints || 0);
     return acc + pts * (item.quantity || 1);
@@ -99,7 +103,6 @@ export default function SiteHeader() {
     <>
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-2xs font-sans h-16 sm:h-20">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-3 sm:gap-6">
-          
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
             <img
@@ -113,7 +116,7 @@ export default function SiteHeader() {
           </Link>
 
           {/* Search Bar */}
-          <form 
+          <form
             onSubmit={handleSearch}
             className="flex-1 max-w-lg mx-2 hidden md:flex items-center bg-gray-50/80 border border-gray-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-[#00875A]/20 focus-within:border-[#00875A] transition-all shadow-2xs"
           >
@@ -139,7 +142,6 @@ export default function SiteHeader() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            
             {/* Wishlist */}
             <Link
               href="/wishlist"
@@ -219,7 +221,7 @@ export default function SiteHeader() {
                       <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                         <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
                           <p className="text-xs font-black text-gray-900 truncate">{currentUser.name}</p>
-                          <p className="text-[10px] text-gray-500 font-medium truncate">{currentUser.email || currentUser.mobile}</p>
+                          <p className="text-[10px] text-gray-500 font-medium truncate">{currentUser.email || currentUser.mobile || currentUser.phone}</p>
                         </div>
 
                         <Link
@@ -270,9 +272,7 @@ export default function SiteHeader() {
                 </>
               )}
             </div>
-
           </div>
-
         </div>
       </header>
 
@@ -282,7 +282,6 @@ export default function SiteHeader() {
           <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
-              
               {/* Header */}
               <div className="p-6 bg-[#00875A] text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -303,7 +302,6 @@ export default function SiteHeader() {
 
                     return (
                       <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3">
-                        
                         {/* Image & Title/Price */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <img 
@@ -317,7 +315,7 @@ export default function SiteHeader() {
                           </div>
                         </div>
 
-                        {/* 🎯 Controls + Points Underneath */}
+                        {/* Controls + Points Underneath */}
                         <div className="flex flex-col items-center gap-1 shrink-0">
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-gray-200">
@@ -328,12 +326,10 @@ export default function SiteHeader() {
                             <button onClick={() => removeFromCart(itemId)} className="text-gray-400 hover:text-rose-500 font-bold text-sm p-1 cursor-pointer">🗑️</button>
                           </div>
 
-                          {/* 🎯 সংখ্যার নিচে আইটেমের পয়েন্ট হিসাব */}
                           <span className="text-[11px] font-bold text-[#00875A] text-center block">
                             +{itemTotalPoints} Points
                           </span>
                         </div>
-
                       </div>
                     );
                   })
@@ -348,8 +344,6 @@ export default function SiteHeader() {
               {/* Footer Subtotal & Total Points */}
               {cartItems.length > 0 && (
                 <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
-                  
-                  {/* 🎯 Subtotal & Total Points */}
                   <div className="flex items-center justify-between text-sm font-black text-gray-900">
                     <div>
                       <span className="block">Subtotal</span>
@@ -365,7 +359,6 @@ export default function SiteHeader() {
                   </Link>
                 </div>
               )}
-
             </div>
           </div>
         </div>

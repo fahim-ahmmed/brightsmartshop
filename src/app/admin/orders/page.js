@@ -77,78 +77,91 @@ export default function AdminOrdersPage() {
         <div className="py-20 text-center text-sm font-bold text-[#00875A] animate-pulse">ডাটা লোড হচ্ছে...</div>
       ) : orders.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {orders.map((ord) => (
-            <div key={ord.orderId} className="bg-white rounded-3xl p-6 border border-gray-200 shadow-sm space-y-4 hover:border-[#00875A] transition-colors relative overflow-hidden">
-              
-              {/* স্ট্যাটাস রিবন */}
-              <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-xl text-[10px] font-black text-white uppercase tracking-wider ${
-                ord.status === "Paid" ? "bg-emerald-500" :
-                ord.status === "Cancelled" ? "bg-rose-500" :
-                ord.status === "Delivered" ? "bg-blue-500" : "bg-amber-500"
-              }`}>
-                {ord.status || "Pending"}
-              </div>
+          {orders.map((ord) => {
+            // 🟢 স্পন্সর বা রেফারেল আইডি চেক (প্রোডাক্ট আইডি না হলে দেখাবে)
+            const sponsor = ord.sponsorCode || ord.referredBy || ord.sponsor || "";
+            const isNotProductId = sponsor && !sponsor.startsWith("PROD") && !sponsor.startsWith("ITEM");
 
-              <div className="border-b border-gray-100 pb-4">
-                <span className="font-black text-gray-900 text-lg block">{ord.orderId}</span>
-                <span className="text-xs font-bold text-gray-500">{new Date(ord.createdAt).toLocaleString()}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs font-medium">
-                <div className="space-y-1.5 bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <p className="font-black text-gray-800 text-sm">{ord.customerName}</p>
-                  <p className="text-gray-600">📞 {ord.phone}</p>
-                  <p className="text-gray-500 line-clamp-2">📍 {ord.address}</p>
+            return (
+              <div key={ord.orderId} className="bg-white rounded-3xl p-6 border border-gray-200 shadow-sm space-y-4 hover:border-[#00875A] transition-colors relative overflow-hidden">
+                
+                {/* স্ট্যাটাস রিবন */}
+                <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-xl text-[10px] font-black text-white uppercase tracking-wider ${
+                  ord.status === "Paid" ? "bg-emerald-500" :
+                  ord.status === "Cancelled" ? "bg-rose-500" :
+                  ord.status === "Delivered" ? "bg-blue-500" : "bg-amber-500"
+                }`}>
+                  {ord.status || "Pending"}
                 </div>
 
-                <div className="space-y-1.5 bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <p className="font-black text-[#00875A] text-lg mb-2">৳{ord.totalAmount}</p>
-                  <p className="bg-white px-2 py-1 rounded border inline-block">💳 {ord.paymentMethod}</p>
-                  {ord.paymentDetails?.transactionId && (
-                    <div className="mt-1">
-                      <p className="text-[10px] font-bold text-amber-600">TrxID: {ord.paymentDetails.transactionId}</p>
-                      <p className="text-[10px] font-bold text-gray-500">Sender: {ord.paymentDetails.senderNumber}</p>
-                    </div>
-                  )}
+                <div className="border-b border-gray-100 pb-4">
+                  <span className="font-black text-gray-900 text-lg block">{ord.orderId}</span>
+                  <span className="text-xs font-bold text-gray-500">{new Date(ord.createdAt).toLocaleString()}</span>
                 </div>
-              </div>
 
-              {/* অর্ডারকৃত পণ্যসমূহ */}
-              <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100 text-xs">
-                <p className="font-black text-gray-800 mb-2 border-b pb-1">অর্ডারকৃত পণ্যসমূহ:</p>
-                <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
-                  {(ord.items || []).map((item, i) => (
-                    <div key={i} className="flex justify-between font-bold text-gray-600">
-                      <span>{item.title} (x{item.quantity || 1})</span>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-4 text-xs font-medium">
+                  <div className="space-y-1.5 bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                    <p className="font-black text-gray-800 text-sm">{ord.customerName}</p>
+                    <p className="text-gray-600">📞 {ord.phone}</p>
+                    <p className="text-gray-500 line-clamp-2">📍 {ord.address}</p>
+
+                    {/* 🟢 স্পন্সর বা রেফারেল আইডি শো */}
+                    {isNotProductId && (
+                      <p className="text-xs text-emerald-700 font-extrabold pt-1 flex items-center gap-1">
+                        <span>🔗</span> Sponsor ID: <span className="font-mono bg-emerald-100 px-2 py-0.5 rounded text-emerald-800 border border-emerald-300">{sponsor}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                    <p className="font-black text-[#00875A] text-lg mb-2">৳{ord.totalAmount}</p>
+                    <p className="bg-white px-2 py-1 rounded border inline-block">💳 {ord.paymentMethod}</p>
+                    {ord.paymentDetails?.transactionId && (
+                      <div className="mt-1">
+                        <p className="text-[10px] font-bold text-amber-600">TrxID: {ord.paymentDetails.transactionId}</p>
+                        <p className="text-[10px] font-bold text-gray-500">Sender: {ord.paymentDetails.senderNumber}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* 🎯 এডমিন একশন বাটনসমূহ */}
-              <div className="no-print flex flex-wrap gap-2 pt-3 border-t border-gray-100">
-                <button
-                  onClick={() => handleUpdateStatus(ord.orderId, "Paid")}
-                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
-                >
-                  ✅ Paid
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(ord.orderId, "Delivered")}
-                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
-                >
-                  📦 Delivered
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(ord.orderId, "Cancelled")}
-                  className="flex-1 min-w-[100px] px-3 py-2.5 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
-                >
-                  ❌ Cancel
-                </button>
-              </div>
+                {/* অর্ডারকৃত পণ্যসমূহ */}
+                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100 text-xs">
+                  <p className="font-black text-gray-800 mb-2 border-b pb-1">অর্ডারকৃত পণ্যসমূহ:</p>
+                  <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                    {(ord.items || []).map((item, i) => (
+                      <div key={i} className="flex justify-between font-bold text-gray-600">
+                        <span>{item.title} (x{item.quantity || 1})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            </div>
-          ))}
+                {/* 🎯 এডমিন একশন বাটনসমূহ */}
+                <div className="no-print flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => handleUpdateStatus(ord.orderId, "Paid")}
+                    className="flex-1 min-w-[100px] px-3 py-2.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    ✅ Paid
+                  </button>
+                  <button
+                    onClick={() => handleUpdateStatus(ord.orderId, "Delivered")}
+                    className="flex-1 min-w-[100px] px-3 py-2.5 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    📦 Delivered
+                  </button>
+                  <button
+                    onClick={() => handleUpdateStatus(ord.orderId, "Cancelled")}
+                    className="flex-1 min-w-[100px] px-3 py-2.5 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    ❌ Cancel
+                  </button>
+                </div>
+
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white p-16 rounded-3xl text-center border shadow-sm space-y-3">

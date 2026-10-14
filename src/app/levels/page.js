@@ -7,32 +7,32 @@ export default function LevelsPage() {
   const [userLevelInfo, setUserLevelInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ২৪ লেভেলের ডাটা
+  // ২৪ লেভেলের ডাটা (Package বাদ দিয়ে)
   const levelsData = [
-    { level: 1, package: "3", taka: "00", designation: "Preferred Customer" },
-    { level: 2, package: "5", taka: "03", designation: "" },
-    { level: 3, package: "9", taka: "04", designation: "" },
-    { level: 4, package: "16", taka: "08", designation: "" },
-    { level: 5, package: "33", taka: "15", designation: "General Customer" },
-    { level: 6, package: "65", taka: "32", designation: "" },
-    { level: 7, package: "129", taka: "60", designation: "" },
-    { level: 8, package: "257", taka: "100", designation: "" },
-    { level: 9, package: "513", taka: "250", designation: "" },
-    { level: 10, package: "1025", taka: "510", designation: "Regular Customer" },
-    { level: 11, package: "2049", taka: "1025", designation: "" },
-    { level: 12, package: "4097", taka: "2050", designation: "" },
-    { level: 13, package: "8193", taka: "4050", designation: "" },
-    { level: 14, package: "16385", taka: "8200", designation: "" },
-    { level: 15, package: "32769", taka: "16000", designation: "Special Customer" },
-    { level: 16, package: "65537", taka: "30000", designation: "" },
-    { level: 17, package: "131073", taka: "65000", designation: "Silver Customer" },
-    { level: 18, package: "262145", taka: "100000", designation: "" },
-    { level: 19, package: "524289", taka: "250000", designation: "Gold Customer" },
-    { level: 20, package: "1048577", taka: "350000", designation: "" },
-    { level: 21, package: "2097153", taka: "800000", designation: "Diamond Customer" },
-    { level: 22, package: "4194305", taka: "1500000", designation: "Platinum Customer" },
-    { level: 23, package: "8388609", taka: "2000000", designation: "Royel Customer" },
-    { level: 24, package: "16777217", taka: "5000000", designation: "Crown Customer" },
+    { level: 1, taka: "00", designation: "Preferred Customer" },
+    { level: 2, taka: "03", designation: "" },
+    { level: 3, taka: "04", designation: "" },
+    { level: 4, taka: "08", designation: "" },
+    { level: 5, taka: "15", designation: "General Customer" },
+    { level: 6, taka: "32", designation: "" },
+    { level: 7, taka: "60", designation: "" },
+    { level: 8, taka: "100", designation: "" },
+    { level: 9, taka: "250", designation: "" },
+    { level: 10, taka: "510", designation: "Regular Customer" },
+    { level: 11, taka: "1025", designation: "" },
+    { level: 12, taka: "2050", designation: "" },
+    { level: 13, taka: "4050", designation: "" },
+    { level: 14, taka: "8200", designation: "" },
+    { level: 15, taka: "16000", designation: "Special Customer" },
+    { level: 16, taka: "30000", designation: "" },
+    { level: 17, taka: "65000", designation: "Silver Customer" },
+    { level: 18, taka: "100000", designation: "" },
+    { level: 19, taka: "250000", designation: "Gold Customer" },
+    { level: 20, taka: "350000", designation: "" },
+    { level: 21, taka: "800000", designation: "Diamond Customer" },
+    { level: 22, taka: "1500000", designation: "Platinum Customer" },
+    { level: 23, taka: "2000000", designation: "Royel Customer" },
+    { level: 24, taka: "5000000", designation: "Crown Customer" },
   ];
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export default function LevelsPage() {
     fetchUserLevel();
   }, []);
 
-  // লজিক অনুযায়ী ডিফল্ট লেভেল ০ থেকে শুরু হবে
+  // লজিক অনুযায়ী ডিফল্ট লেভেল ০ থেকে শুরু হবে
   const currentLevel = userLevelInfo?.level !== undefined ? userLevelInfo.level : 0;
   const currentPackages = userLevelInfo?.totalAccumulatedPackages || 0;
 
@@ -84,7 +84,7 @@ export default function LevelsPage() {
             </p>
           </div>
 
-          {/* Dynamic User Stats Cards (গ্লোবাল চেইন পজিশন বাদ দিয়ে ২টি কার্ড রাখা হলো) */}
+          {/* Dynamic User Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-700/50 space-y-1">
               <p className="text-[11px] font-bold text-slate-400">বর্তমান লেভেল</p>
@@ -111,14 +111,13 @@ export default function LevelsPage() {
           </div>
         </div>
 
-        {/* 24 Level Table Structure */}
+        {/* 24 Level Table Structure (Package Column Removed) */}
         <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs sm:text-sm">
               <thead>
                 <tr className="bg-slate-950 text-slate-300 uppercase font-black tracking-wider text-[11px] border-b border-slate-700">
                   <th className="py-4 px-6">Level</th>
-                  <th className="py-4 px-6">Package</th>
                   <th className="py-4 px-6">Taka (Cashback)</th>
                   <th className="py-4 px-6">Designation</th>
                 </tr>
@@ -136,7 +135,6 @@ export default function LevelsPage() {
                       }`}
                     >
                       <td className="py-3.5 px-6 font-bold">{row.level}</td>
-                      <td className="py-3.5 px-6 font-bold text-amber-300">{row.package} Pkg</td>
                       <td className="py-3.5 px-6 font-extrabold text-emerald-400">৳ {row.taka}</td>
                       <td className="py-3.5 px-6 font-semibold">
                         {row.designation ? (
