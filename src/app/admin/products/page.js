@@ -161,10 +161,14 @@ export default function AdminProductsPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans text-slate-100">
-      {/* Top Banner */}
-      <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-800 flex justify-between items-center">
+    <div className="space-y-8 font-sans text-slate-100 max-w-7xl mx-auto pb-12">
+      
+      {/* Top Banner & Stats Summary */}
+      <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl">
         <div>
+          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">
+            ADMIN INVENTORY
+          </span>
           <h1 className="text-2xl font-black text-white">
             Upload & Live Product Management
           </h1>
@@ -172,23 +176,31 @@ export default function AdminProductsPage() {
             Product will save to MongoDB and appear live on store catalog immediately.
           </p>
         </div>
-        <button
-          onClick={loadProducts}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-        >
-          🔄 Refresh List ({products.length})
-        </button>
+
+        <div className="flex items-center gap-3">
+          <div className="bg-[#0F172A] px-4 py-2 rounded-2xl border border-slate-700 text-center">
+            <span className="text-[10px] font-bold text-slate-400 block">Total Active</span>
+            <span className="text-sm font-black text-emerald-400">{products.length} Items</span>
+          </div>
+
+          <button
+            onClick={loadProducts}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            🔄 Refresh List
+          </button>
+        </div>
       </div>
 
       {/* Upload Form */}
-      <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-800 shadow-xl space-y-6">
-        <h2 className="text-lg font-bold text-white border-b border-slate-800 pb-3">
-          Publish New Product
+      <div className="bg-[#1E293B] p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
+        <h2 className="text-lg font-bold text-white border-b border-slate-800 pb-3 flex items-center gap-2">
+          <span>📦</span> Publish New Product
         </h2>
 
         <form
           onSubmit={handleAddProduct}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
         >
           <div className="space-y-1.5 lg:col-span-2">
             <label className="text-xs font-bold text-slate-300">
@@ -353,7 +365,7 @@ export default function AdminProductsPage() {
             <button
               type="submit"
               disabled={publishing}
-              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer"
+              className="px-8 py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer"
             >
               {publishing
                 ? "Publishing to Database..."
@@ -363,80 +375,108 @@ export default function AdminProductsPage() {
         </form>
       </div>
 
-      {/* Live Catalog List */}
-      <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-        <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-3">
-          Live Published Products in Store ({products.length})
-        </h3>
+      {/* Live Catalog Preview Section */}
+      <div className="bg-[#1E293B] p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h3 className="text-lg font-bold text-white">
+              Live Published Products Preview
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Currently showing all running products loaded from MongoDB database.
+            </p>
+          </div>
+          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold">
+            Total: {products.length} Active
+          </span>
+        </div>
 
         {loading ? (
-          <p className="text-xs text-emerald-400 py-8 text-center font-bold animate-pulse">
-            Loading products from MongoDB...
-          </p>
+          <div className="text-center py-16 space-y-3">
+            <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="text-xs text-emerald-400 font-bold animate-pulse">
+              Loading products from MongoDB...
+            </p>
+          </div>
         ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {products.map((p) => (
               <div
                 key={p._id || p.id}
-                className="p-4 bg-[#0F172A] rounded-2xl border border-slate-800 flex flex-col justify-between gap-3 shadow-md"
+                className="p-4 bg-[#0F172A] rounded-2xl border border-slate-800/80 hover:border-emerald-500/40 transition-all flex flex-col justify-between gap-4 shadow-md group"
               >
-                <div className="flex items-center gap-3">
-                  <img
-                    src={p.image || "📦"}
-                    alt={p.title}
-                    className="w-12 h-12 rounded-xl object-cover bg-slate-800 shrink-0"
-                  />
-                  <div>
-                    <h4 className="font-bold text-xs text-white line-clamp-1">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-16 h-16 bg-slate-800 rounded-xl overflow-hidden shrink-0 border border-slate-700 flex items-center justify-center p-1">
+                    <img
+                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                      alt={p.title}
+                      className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wide block truncate">
+                      {p.category || "General"}
+                    </span>
+                    <h4 className="font-extrabold text-xs text-white line-clamp-1">
                       {p.title}
                     </h4>
-                    
+
                     {/* 🟢 প্রাইস এবং কাটা ডিসকাউন্ট প্রাইস */}
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold mt-0.5">
-                      <span className="text-emerald-400">৳{p.price}</span>
-                      {p.discountPrice > 0 && (
-                        <span className="text-slate-400 line-through text-[10px]">
+                    <div className="flex items-baseline gap-2 pt-0.5">
+                      <span className="text-sm font-black text-emerald-400">৳{p.price}</span>
+                      {Number(p.discountPrice) > 0 && (
+                        <span className="text-slate-400 line-through text-xs font-bold">
                           ৳{p.discountPrice}
                         </span>
                       )}
-                      <span className="text-[10px] text-slate-500">| {p.category}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 font-bold">
-                        🌟 +{p.points || p.point || 0} Pts
-                      </span>
-                      <span className="text-[9px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-bold">
-                        📦 {p.unit || p.weight || "1 Pcs"}
-                      </span>
                     </div>
                   </div>
                 </div>
 
+                {/* Badges Row */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] bg-amber-500/10 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/30 font-bold">
+                    🌟 +{p.points || p.point || 0} Pts
+                  </span>
+                  <span className="text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700 font-bold">
+                    📦 {p.unit || p.weight || "1 Pcs"}
+                  </span>
+                  <span className="text-[10px] bg-sky-500/10 text-sky-300 px-2.5 py-1 rounded-lg border border-sky-500/30 font-bold ml-auto">
+                    Stock: {p.stock || 0}
+                  </span>
+                </div>
+
                 {p.description && (
-                  <p className="text-[11px] text-slate-400 line-clamp-2 bg-slate-900/60 p-2.5 rounded-xl">
+                  <p className="text-[11px] text-slate-400 line-clamp-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800/50 leading-relaxed">
                     {p.description}
                   </p>
                 )}
 
-                <div className="flex justify-end pt-1">
+                <div className="flex justify-between items-center pt-2 border-t border-slate-800/80">
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    ID: {(p._id || p.id || "").toString().slice(-6)}
+                  </span>
                   <button
                     onClick={() => handleDeleteProduct(p._id || p.id)}
-                    className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold rounded-xl transition-all cursor-pointer"
                   >
-                    Delete Product
+                    🗑️ Delete
                   </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-xs text-slate-400 py-10 text-center italic">
-            No active products found in database. Use the form above to publish
-            your first product!
-          </p>
+          <div className="text-center py-16 bg-[#0F172A] rounded-2xl border border-slate-800/80 space-y-3">
+            <div className="text-4xl">📭</div>
+            <p className="text-xs text-slate-400 font-bold">
+              No active products found in database. Use the form above to publish your first product!
+            </p>
+          </div>
         )}
       </div>
+
     </div>
   );
 }

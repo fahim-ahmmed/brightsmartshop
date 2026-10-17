@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import toast, { Toaster } from "react-hot-toast";
 
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -9,7 +10,6 @@ export default function AdminCategoriesPage() {
   const [parentCategory, setParentCategory] = useState("Main");
   const [icon, setIcon] = useState("🏷️");
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
 
   const fetchCategories = async () => {
     try {
@@ -20,6 +20,7 @@ export default function AdminCategoriesPage() {
       }
     } catch (err) {
       console.error("Failed to load categories:", err);
+      toast.error("ক্যাটাগরি লোড করতে সমস্যা হয়েছে!");
     } finally {
       setLoading(false);
     }
@@ -32,7 +33,7 @@ export default function AdminCategoriesPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    setMessage({ type: "", text: "" });
+    const toastId = toast.loading("ক্যাটাগরি সেভ হচ্ছে...");
 
     try {
       const res = await fetch("/api/admin/categories", {
@@ -47,13 +48,13 @@ export default function AdminCategoriesPage() {
         throw new Error(data.message || "Failed to create category");
       }
 
-      setMessage({ type: "success", text: "ক্যাটাগরি সফলভাবে তৈরি করা হয়েছে!" });
+      toast.success("ক্যাটাগরি সফলভাবে তৈরি করা হয়েছে!", { id: toastId });
       setName("");
       setParentCategory("Main");
       setIcon("🏷️");
       fetchCategories();
     } catch (err) {
-      setMessage({ type: "error", text: err.message });
+      toast.error(err.message || "কিছু সমস্যা হয়েছে!", { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -62,7 +63,11 @@ export default function AdminCategoriesPage() {
   const mainCategories = categories.filter((c) => !c.parentCategory || c.parentCategory === "Main");
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <div className="space-y-6 max-w-2xl mx-auto p-4 sm:p-6">
+      
+      {/* টোস্ট কন্টেইনার */}
+      <Toaster position="top-right" reverseOrder={false} />
+
       <div>
         <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">
           ADMIN CONTROL
@@ -73,14 +78,8 @@ export default function AdminCategoriesPage() {
         </p>
       </div>
 
-      {message.text && (
-        <div className={`p-4 rounded-2xl text-xs font-bold ${message.type === "success" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/30"}`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* শুধু ফরমটি দৃশ্যমান থাকবে, নিচের লিস্ট সেকশনটি হাইড করা হলো */}
-      <div className="bg-[#1E293B] border border-slate-800 p-6 rounded-3xl space-y-4">
+      {/* ফরম সেকশন */}
+      <div className="bg-[#1E293B] border border-slate-800 p-6 rounded-3xl space-y-4 shadow-xl">
         <h2 className="text-sm font-extrabold text-white uppercase tracking-wider">নতুন ক্যাটাগরি তৈরি করুন</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -89,7 +88,7 @@ export default function AdminCategoriesPage() {
             <select
               value={parentCategory}
               onChange={(e) => setParentCategory(e.target.value)}
-              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-medium"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-medium"
             >
               <option value="Main">📁 মূল ক্যাটাগরি (Main Category)</option>
               {mainCategories.map((cat) => (
@@ -108,7 +107,7 @@ export default function AdminCategoriesPage() {
               placeholder="যেমন: Electronics, Grocery ইত্যাদি"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-medium"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-medium"
             />
           </div>
 
@@ -119,14 +118,14 @@ export default function AdminCategoriesPage() {
               placeholder="যেমন: 📱 বা 🛒"
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
-              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-medium"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-medium"
             />
           </div>
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer mt-2"
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer mt-2 disabled:opacity-50"
           >
             {submitting ? "সেভ হচ্ছে..." : "+ ক্যাটাগরি সেভ করুন"}
           </button>

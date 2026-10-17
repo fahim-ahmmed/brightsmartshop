@@ -10,8 +10,16 @@ export const metadata = { title: 'Order' };
 export default async function AdminOrderPage({ params }) {
   const { orderNo } = await params;
   const detail = await getOrderDetail(orderNo);
+  
   if (!detail) notFound();
+  
   const { order, customer } = detail;
+
+  // 🟢 স্পন্সর বা রেফারেল আইডি ধরার লজিক
+  const sponsor = order.sponsorId || order.sponsorCode || order.referredBy || order.sponsor || order.refId || order.referral || "";
+  const isMongoId = /^[a-fA-F0-9]{24}$/.test(sponsor);
+  const isProductRef = sponsor && (isMongoId || sponsor.toUpperCase().includes("PROD") || sponsor.toUpperCase().includes("ITEM") || sponsor.toUpperCase().includes("BSS"));
+  const isHumanRef = sponsor && !isProductRef;
 
   return (
     <main className="max-w-3xl space-y-6">
@@ -33,19 +41,47 @@ export default async function AdminOrderPage({ params }) {
             <span>{formatTaka(i.pricePaisa * i.qty)}</span>
           </li>
         ))}
-        <li className="flex justify-between p-4 font-semibold"><span>Total ({formatPoints(order.totalPointsX100, { fixed: true })} Point)</span><span>{formatTaka(order.totalPaisa)}</span></li>
+        <li className="flex justify-between p-4 font-semibold">
+          <span>Total ({formatPoints(order.totalPointsX100, { fixed: true })} Point)</span>
+          <span>{formatTaka(order.totalPaisa)}</span>
+        </li>
       </ul>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <section className="rounded-2xl border border-divider bg-content1 p-4">
-          <h2 className="font-semibold">Delivery</h2>
-          <p>{order.shipping.name} · {order.shipping.mobile}</p>
-          <p className="text-default-700">{order.shipping.address}</p>
+          <h2 className="font-semibold mb-2">Delivery</h2>
+          <p>{order.shipping?.name} · {order.shipping?.mobile}</p>
+          <p className="text-default-700">{order.shipping?.address}</p>
           <p className="mt-2 text-sm text-default-600">Payment: cash on delivery</p>
         </section>
+        
         <section className="rounded-2xl border border-divider bg-content1 p-4">
-          <h2 className="font-semibold">Account</h2>
-          {customer ? <p>{customer.name}<span className="block text-default-600">{customer.email}</span><span className="block text-default-600">{customer.mobile}</span></p> : <p className="text-default-600">Account not found.</p>}
+          <h2 className="font-semibold mb-2">Account & Referral</h2>
+          {customer ? (
+            <div>
+              <p>{customer.name}</p>
+              <span className="block text-default-600">{customer.email}</span>
+              <span className="block text-default-600">{customer.mobile}</span>
+            </div>
+          ) : (
+            <p className="text-default-600">Account not found.</p>
+          )}
+
+          {/* 🟢 রেফারেল বা স্পন্সর আইডি দেখানোর অংশ */}
+          {sponsor && (
+            <div className="mt-3 pt-3 border-t border-divider">
+              {isHumanRef && (
+                <p className="text-sm font-bold text-purple-700 flex items-center gap-1.5">
+                  <span>👤</span> Man ID: <span className="font-mono bg-purple-100 px-2 py-0.5 rounded border border-purple-200">{sponsor}</span>
+                </p>
+              )}
+              {isProductRef && (
+                <p className="text-sm font-bold text-blue-700 flex items-center gap-1.5">
+                  <span>📦</span> Product ID: <span className="font-mono bg-blue-100 px-2 py-0.5 rounded border border-blue-200">{sponsor}</span>
+                </p>
+              )}
+            </div>
+          )}
         </section>
       </div>
     </main>

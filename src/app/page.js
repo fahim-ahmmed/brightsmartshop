@@ -380,13 +380,14 @@ export default function HomePage() {
           ) : products.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
               {products.map((p) => {
+                const prodId = p._id || p.id;
                 const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
                 const sellPrice = Number(p.price || 0);
                 const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
 
                 return (
                   <div
-                    key={p._id || p.id}
+                    key={prodId}
                     className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
                   >
                     {/* 🔴 SAVE Badge */}
@@ -396,14 +397,14 @@ export default function HomePage() {
                       </span>
                     )}
 
-                    {/* Image */}
-                    <div className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/80 transition-colors">
+                    {/* 🟢 Clickable Image linked to details page */}
+                    <Link href={`/shop/${prodId}`} className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block">
                       <img
                         src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
                         alt={p.title}
                         className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
                       />
-                    </div>
+                    </Link>
 
                     {/* Title, Category & Unit */}
                     <div className="space-y-1 mb-2">
@@ -415,15 +416,17 @@ export default function HomePage() {
                           📦 {p.unit || p.weight || "1 Pcs"}
                         </span>
                       </div>
-                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A]">
-                        {p.title}
-                      </h3>
+                      
+                      {/* 🟢 Clickable Title linked to details page */}
+                      <Link href={`/shop/${prodId}`}>
+                        <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
+                          {p.title}
+                        </h3>
+                      </Link>
                     </div>
 
                     {/* Price (Left) & Points (Right) Row */}
                     <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                      
-                      {/* সেলিং প্রাইস ও কাটা ডিসকাউন্ট প্রাইস */}
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
                         {saveAmount > 0 && (
@@ -431,11 +434,9 @@ export default function HomePage() {
                         )}
                       </div>
 
-                      {/* পয়েন্ট */}
                       <span className="text-xs font-bold text-gray-700">
                         +{p.points || p.point || 0} Points
                       </span>
-
                     </div>
 
                     {/* Buy Now & Cart Buttons */}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
+import { ObjectId } from "mongodb";
 
 // সমস্ত ক্যাটাগরি ও সাব-ক্যাটাগরি ফেচ করার GET মেথড
 export async function GET() {
@@ -8,7 +9,7 @@ export async function GET() {
     const db = client.db();
     const categories = await db.collection("categories").find({}).sort({ createdAt: -1 }).toArray();
 
-    return NextResponse.json({ success: true, categories });
+    return NextResponse.json({ success: true, categories }, { status: 200 });
   } catch (error) {
     console.error("Fetch categories error:", error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -29,7 +30,7 @@ export async function POST(req) {
     const db = client.db();
     const collection = db.collection("categories");
 
-    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
+    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
     const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 
     // চেক করা এই নামে অলরেডি কোনো ক্যাটাগরি আছে কি না
@@ -39,7 +40,7 @@ export async function POST(req) {
     }
 
     const newCategory = {
-      name,
+      name: name.trim(),
       slug: categorySlug,
       parentCategory: parentCategory || "Main", // "Main" হলে মেইন ক্যাটাগরি, না হলে প্যারেন্টের নাম সাব-ক্যাটাগরি হিসেবে থাকবে
       icon: icon || "📁",
@@ -53,7 +54,7 @@ export async function POST(req) {
       message: "Category created permanently!",
       categoryId: result.insertedId,
       category: newCategory,
-    });
+    }, { status: 201 });
   } catch (error) {
     console.error("Create category error:", error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -70,13 +71,12 @@ export async function DELETE(req) {
       return NextResponse.json({ success: false, message: "Category ID is required" }, { status: 400 });
     }
 
-    const { ObjectId } = require("mongodb");
     const client = await clientPromise;
     const db = client.db();
 
     await db.collection("categories").deleteOne({ _id: new ObjectId(id) });
 
-    return NextResponse.json({ success: true, message: "Category deleted successfully!" });
+    return NextResponse.json({ success: true, message: "Category deleted successfully!" }, { status: 200 });
   } catch (error) {
     console.error("Delete category error:", error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
