@@ -17,7 +17,7 @@ export default function AdminOrdersPage() {
       }
     } catch (e) {
       console.error(e);
-      toast.error("ডাটা ফেচ করতে সমস্যা হয়েছে!");
+      toast.error("ডাটা ফেচ করতে সমস্যা হয়েছে!");
     } finally {
       setLoading(false);
     }
@@ -49,16 +49,16 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // 🟢 কড়া লজিক: 'M' দিয়ে শুরু হলে ম্যান আইডি, আর 'P' দিয়ে শুরু হলে প্রোডাক্ট আইডি
+  // 🟢 ফিল্টারিং: শুধু 'M' এবং 'P' আলাদা করা (BSS ওভারঅল লিস্টে থাকবে)
   const manIdOrders = [];
   const productIdOrders = [];
 
   orders.forEach((ord) => {
-    const orderNo = ord.orderNo || ord.orderId || "";
+    const orderNo = (ord.orderNo || ord.orderId || "").toUpperCase();
     
-    if (orderNo.toUpperCase().startsWith("M")) {
+    if (orderNo.startsWith("M")) {
       manIdOrders.push(ord);
-    } else if (orderNo.toUpperCase().startsWith("P")) {
+    } else if (orderNo.startsWith("P")) {
       productIdOrders.push(ord);
     }
   });
@@ -79,7 +79,7 @@ export default function AdminOrdersPage() {
           {ord.status || "Pending"}
         </div>
 
-        {/* অর্ডার আইডি ও সময় */}
+        {/* অর্ডার আইডি ও সময় */}
         <div className="border-b border-gray-100 pb-1.5 pr-14">
           <span className="font-black text-gray-900 text-sm tracking-wide">{ord.orderId || ord.orderNo}</span>
           <span className="text-[10px] text-gray-400 block">{new Date(ord.createdAt).toLocaleString()}</span>
@@ -91,14 +91,14 @@ export default function AdminOrdersPage() {
             <span className="font-black text-gray-800">{ord.customerName}</span>
             <span className="text-gray-600 font-semibold">{ord.phone}</span>
           </div>
-          <p className="text-gray-500 text-[11px] truncate">📍 {ord.address || "ঠিকানা দেওয়া হয়নি"}</p>
+          <p className="text-gray-500 text-[11px] truncate">📍 {ord.address || "ঠিকানা দেওয়া হয়নি"}</p>
         </div>
 
         {/* অ্যামাউন্ট, পেমেন্ট এবং রেফারেল সেকশন */}
         <div className="flex justify-between items-center px-1">
           <div>
             <span className="font-black text-[#00875A] text-base">৳{ord.totalAmount || 0}</span>
-            <span className="text-[10px] text-gray-500 block font-medium">💳 {ord.paymentMethod || "COD"}</span>
+            <span className="text-[10px] text-gray-500 block font-medium">💳 {ord.paymentMethod || "COD"} | পয়েন্ট: {ord.totalPoints || ord.points || 0}</span>
           </div>
 
           {sponsor && (
@@ -113,13 +113,13 @@ export default function AdminOrdersPage() {
 
         {/* অ্যাকশন বাটন */}
         <div className="no-print grid grid-cols-3 gap-1 pt-1.5 border-t border-gray-100">
-          <button onClick={() => handleUpdateStatus(ord.orderId, "Paid")} className="py-1.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
+          <button onClick={() => handleUpdateStatus(ord.orderId || ord.orderNo, "Paid")} className="py-1.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
             ✅ Paid
           </button>
-          <button onClick={() => handleUpdateStatus(ord.orderId, "Delivered")} className="py-1.5 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
+          <button onClick={() => handleUpdateStatus(ord.orderId || ord.orderNo, "Delivered")} className="py-1.5 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
             📦 Deliv
           </button>
-          <button onClick={() => handleUpdateStatus(ord.orderId, "Cancelled")} className="py-1.5 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
+          <button onClick={() => handleUpdateStatus(ord.orderId || ord.orderNo, "Cancelled")} className="py-1.5 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
             ❌ Cancel
           </button>
         </div>
@@ -145,7 +145,10 @@ export default function AdminOrdersPage() {
 
         {/* অ্যামাউন্ট ও রেফারেল */}
         <div className="flex items-center gap-6">
-          <span className="font-black text-[#00875A] text-sm">৳{ord.totalAmount || 0}</span>
+          <div>
+            <span className="font-black text-[#00875A] text-sm block">৳{ord.totalAmount || 0}</span>
+            <span className="text-[10px] text-gray-500 font-bold">পয়েণ্ট: {ord.totalPoints || ord.points || 0}</span>
+          </div>
           
           {sponsor ? (
             <span className="font-mono bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200 font-bold text-[10px]">
@@ -168,13 +171,13 @@ export default function AdminOrdersPage() {
 
           {/* ছোট্ট একশন বাটন */}
           <div className="no-print flex items-center gap-1">
-            <button onClick={() => handleUpdateStatus(ord.orderId, "Paid")} title="Paid" className="px-2 py-1 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-[10px] rounded transition-all cursor-pointer">
+            <button onClick={() => handleUpdateStatus(ord.orderId || ord.orderNo, "Paid")} title="Paid" className="px-2 py-1 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-[10px] rounded transition-all cursor-pointer">
               ✅
             </button>
-            <button onClick={() => handleUpdateStatus(ord.orderId, "Delivered")} title="Delivered" className="px-2 py-1 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-[10px] rounded transition-all cursor-pointer">
+            <button onClick={() => handleUpdateStatus(ord.orderId || ord.orderNo, "Delivered")} title="Delivered" className="px-2 py-1 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-[10px] rounded transition-all cursor-pointer">
               📦
             </button>
-            <button onClick={() => handleUpdateStatus(ord.orderId, "Cancelled")} title="Cancel" className="px-2 py-1 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-[10px] rounded transition-all cursor-pointer">
+            <button onClick={() => handleUpdateStatus(ord.orderId || ord.orderNo, "Cancelled")} title="Cancel" className="px-2 py-1 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-[10px] rounded transition-all cursor-pointer">
               ❌
             </button>
           </div>
@@ -210,7 +213,7 @@ export default function AdminOrdersPage() {
       ) : (
         <div className="space-y-6">
           
-          {/* ১. সবার উপরে: ওভারঅল অর্ডার লিস্ট (কমপ্যাক্ট কার্ড গ্রিড) */}
+          {/* ১. সবার উপরে: ওভারঅল অর্ডার লিস্ট (যেখানে BSS সহ সব অর্ডার থাকবে) */}
           <div className="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden flex flex-col">
             <div className="bg-gray-800 px-4 py-3 text-white flex justify-between items-center">
               <h2 className="text-sm font-black flex items-center gap-2">🌐 ওভারঅল অর্ডার লিস্ট (Total Orders)</h2>
@@ -220,16 +223,16 @@ export default function AdminOrdersPage() {
             <div className="p-4 overflow-y-auto max-h-[500px] bg-gray-50/50 custom-scroll">
               {orders.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
-                  {orders.map(ord => <SlimOrderCard key={ord.orderId || ord._id} ord={ord} />)}
+                  {orders.map(ord => <SlimOrderCard key={ord.orderId || ord._id || ord.orderNo} ord={ord} />)}
                 </div>
               ) : (
-                <p className="text-center text-gray-400 py-12 font-bold text-xs">কোনো অর্ডার পাওয়া যায়নি</p>
+                <p className="text-center text-gray-400 py-12 font-bold text-xs">কোনো অর্ডার পাওয়া যায়নি</p>
               )}
             </div>
           </div>
 
           
-          {/* ২. তার নিচে: ম্যান আইডি (M) এবং প্রোডাক্ট আইডি (P) এর স্লিম লিস্ট ভিউ */}
+          {/* ২. তার নিচে: ম্যান আইডি (M) এবং প্রোডাক্ট আইডি (P) এর লিস্ট ভিউ */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             
             {/* বাম পাশ: ম্যান আইডি (Man ID) - লিস্ট ভিউ */}
@@ -241,7 +244,7 @@ export default function AdminOrdersPage() {
               
               <div className="p-4 overflow-y-auto bg-purple-50/20 flex-1 space-y-2.5 custom-scroll">
                 {manIdOrders.length > 0 ? (
-                  manIdOrders.map(ord => <OrderListRow key={ord.orderId || ord._id} ord={ord} />)
+                  manIdOrders.map(ord => <OrderListRow key={ord.orderId || ord._id || ord.orderNo} ord={ord} />)
                 ) : (
                   <p className="text-center text-purple-400 py-16 font-bold text-xs">কোনো ম্যান আইডি অর্ডার নেই</p>
                 )}
@@ -257,7 +260,7 @@ export default function AdminOrdersPage() {
               
               <div className="p-4 overflow-y-auto bg-blue-50/20 flex-1 space-y-2.5 custom-scroll">
                 {productIdOrders.length > 0 ? (
-                  productIdOrders.map(ord => <OrderListRow key={ord.orderId || ord._id} ord={ord} />)
+                  productIdOrders.map(ord => <OrderListRow key={ord.orderId || ord._id || ord.orderNo} ord={ord} />)
                 ) : (
                   <p className="text-center text-blue-400 py-16 font-bold text-xs">কোনো প্রোডাক্ট আইডি অর্ডার নেই</p>
                 )}

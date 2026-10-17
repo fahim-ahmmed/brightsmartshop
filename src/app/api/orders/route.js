@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client"; 
 
-// ২৪ লেভেলের ক্রাইটেরিয়া, প্যাকেজ এবং লেভেল আপ ক্যাশব্যাক চার্ট
+// ২৪ লেভেলের ক্রাইটেরিয়া, প্যাকেজ এবং লেভেল আপ ক্যাশব্যাক চার্ট
 const LEVEL_CONFIG = [
   { level: 1, requiredPackages: 3, taka: 0 },
   { level: 2, requiredPackages: 5, taka: 3 },
@@ -31,7 +31,7 @@ const LEVEL_CONFIG = [
 
 async function processOrderToGlobalChain(orderData) {
   const { userId, userName, points } = orderData;
-  const packagesGenerated = Math.floor(points / 40); // ৪০ পয়েন্ট = ১ প্যাকেজ
+  const packagesGenerated = Math.floor(points / 40); // ৪০ পয়েন্ট = ১ প্যাকেজ
 
   if (packagesGenerated <= 0) return;
 
@@ -119,17 +119,33 @@ async function processOrderToGlobalChain(orderData) {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { userId, totalPoints } = body;
+    const { userId, totalPoints, orderType } = body;
 
     const client = await clientPromise;
     const db = client.db();
     const ordersCollection = db.collection("orders");
 
     const existingOrdersCount = await ordersCollection.countDocuments({ userId: userId });
-    const isManId = existingOrdersCount === 0;
+    const isFirstOrder = existingOrdersCount === 0;
 
+    const points = Number(totalPoints || body.points || 0);
     const randomDigits = Math.floor(100000 + Math.random() * 900000);
-    const prefix = isManId ? "M" : "P";
+    
+    let prefix = "BSS"; 
+    let isManId = false;
+
+    // 🟢 সঠিক প্রিফিক্স ও অর্ডার আইডি লজিক
+    if (orderType === "M" || (isFirstOrder && points >= 40)) {
+      prefix = "M";
+      isManId = true;
+    } else if (orderType === "P" || points >= 40) {
+      prefix = "P";
+      isManId = false;
+    } else {
+      prefix = "BSS"; // ৪০ পয়েন্টের নিচে হলে সাধারণ BSS অর্ডার হবে
+      isManId = false;
+    }
+
     const generatedOrderNo = `${prefix}-${randomDigits}`;
 
     const newOrder = {
@@ -144,11 +160,11 @@ export async function POST(req) {
 
     const result = await ordersCollection.insertOne(newOrder);
 
-    if (totalPoints && totalPoints > 0) {
+    if (points > 0) {
       await processOrderToGlobalChain({
         userId: userId,
         userName: body.customerName,
-        points: totalPoints,
+        points: points,
       });
     }
 
