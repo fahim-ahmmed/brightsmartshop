@@ -12,7 +12,7 @@ export default function ProductDetailPage() {
   const productId = params?.id;
 
   const cartContext = useCart();
-  const addToCart = cartContext?.addToCart || (() => {});
+  const addToCart = cartContext?.addToCart || (() => { });
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +117,7 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-gray-800 pb-16">
-      
+
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-4">
         <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
           <Link href="/" className="hover:text-[#00875A]">Home</Link>
@@ -130,7 +130,7 @@ export default function ProductDetailPage() {
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-8">
         <div className="bg-white rounded-3xl border border-gray-200/80 shadow-xs p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
+
           <div className="lg:col-span-5 space-y-4">
             <div className="w-full h-[320px] sm:h-[420px] bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center p-4 relative">
               {saveAmount > 0 && (
@@ -151,9 +151,8 @@ export default function ProductDetailPage() {
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(img)}
-                    className={`w-16 h-16 rounded-xl border-2 overflow-hidden bg-gray-50 flex items-center justify-center p-1 shrink-0 cursor-pointer transition-all ${
-                      selectedImage === img ? "border-[#00875A] shadow-md scale-105" : "border-gray-200 opacity-70"
-                    }`}
+                    className={`w-16 h-16 rounded-xl border-2 overflow-hidden bg-gray-50 flex items-center justify-center p-1 shrink-0 cursor-pointer transition-all ${selectedImage === img ? "border-[#00875A] shadow-md scale-105" : "border-gray-200 opacity-70"
+                      }`}
                   >
                     <img src={img} alt="" className="w-full h-full object-contain rounded-lg" />
                   </button>
@@ -201,11 +200,12 @@ export default function ProductDetailPage() {
               </span>
             </div>
 
+            {/* প্রোডাক্ট ডেসক্রিপশন সেকশন */}
             <div className="space-y-2 pt-2 border-t border-gray-100">
               <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">Product Description</h3>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium leading-relaxed">
-                {product.description || product.details || "এই প্রোডাক্টটি চমৎকার মানের এবং প্রিমিয়াম কোয়ালিটির। আপনার দৈনন্দিন প্রয়োজন মেটাতে এটি অত্যন্ত উপযোগী ও নির্ভরযোগ্য।"}
-              </p>
+              <div className="text-xs sm:text-sm text-gray-600 font-medium leading-relaxed whitespace-pre-line">
+                {product.description || product.desc || product.details || "কোনো বিবরণ দেওয়া হয়নি।"}
+              </div>
             </div>
 
             <div className="space-y-4 pt-4 border-t border-gray-100">
