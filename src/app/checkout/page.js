@@ -29,6 +29,7 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
+  const [userSponsor, setUserSponsor] = useState(""); // 🟢 রেফারেল বা স্পন্সর কোড স্টেট
 
   useEffect(() => {
     const savedUser = localStorage.getItem("bright_user");
@@ -39,6 +40,11 @@ function CheckoutContent() {
     } else {
       try {
         const user = JSON.parse(savedUser);
+        
+        // 🟢 ইউজারের প্রোফাইল বা লোকালস্টোরেজ থেকে স্পন্সর আইডি ধরার লজিক
+        const sponsor = user.sponsorId || user.sponsorCode || user.referredBy || user.sponsor || user.refId || user.referral || "";
+        setUserSponsor(sponsor);
+
         setFormData((prev) => ({
           ...prev,
           name: user.name || prev.name,
@@ -136,6 +142,7 @@ function CheckoutContent() {
         deliveryCharge,
         totalAmount,
         status: "Pending",
+        sponsorId: userSponsor, // 🟢 এখানে স্পন্সর বা রেফারেল আইডি যুক্ত করে দেওয়া হলো
         createdAt: new Date(),
       };
 
@@ -246,6 +253,13 @@ function CheckoutContent() {
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
               />
             </div>
+
+            {/* 🟢 যদি ইউজারের কোনো স্পন্সর বা রেফারেল থাকে তা এখানে শো করতে পারেন */}
+            {userSponsor && (
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-2">
+                <span className="text-amber-800 font-bold text-xs">🤝 আপনার রেফারেন্স আইডি: <span className="font-mono">{userSponsor}</span></span>
+              </div>
+            )}
           </div>
 
           <h2 className="text-sm font-extrabold text-gray-900 border-b pb-3 pt-2">

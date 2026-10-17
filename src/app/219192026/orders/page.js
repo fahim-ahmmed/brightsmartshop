@@ -49,26 +49,21 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // অর্ডারগুলোকে ম্যান আইডি ও প্রোডাক্ট আইডিতে ফিল্টার ও সেপারেশন করার লজিক
+  // 🟢 কড়া লজিক: 'M' দিয়ে শুরু হলে ম্যান আইডি, আর 'P' দিয়ে শুরু হলে প্রোডাক্ট আইডি
   const manIdOrders = [];
   const productIdOrders = [];
 
   orders.forEach((ord) => {
-    const sponsor = ord.sponsorId || ord.sponsorCode || ord.referredBy || ord.sponsor || ord.refId || ord.referral || "";
+    const orderNo = ord.orderNo || ord.orderId || "";
     
-    if (sponsor) {
-      const isMongoId = /^[a-fA-F0-9]{24}$/.test(sponsor);
-      const isProductRef = isMongoId || sponsor.toUpperCase().includes("PROD") || sponsor.toUpperCase().includes("ITEM") || sponsor.toUpperCase().includes("BSS");
-      
-      if (isProductRef) {
-        productIdOrders.push(ord);
-      } else {
-        manIdOrders.push(ord);
-      }
+    if (orderNo.toUpperCase().startsWith("M")) {
+      manIdOrders.push(ord);
+    } else if (orderNo.toUpperCase().startsWith("P")) {
+      productIdOrders.push(ord);
     }
   });
 
-  // 🟢 একদম স্লিম, ছোট এবং কমপ্যাক্ট অর্ডার কার্ড (যাতে একসাথে অনেকগুলো অর্ডার দেখা যায়)
+  // 🟢 ১. ওভারঅল অর্ডার লিস্টের জন্য কমপ্যাক্ট স্লিম কার্ড
   const SlimOrderCard = ({ ord }) => {
     const sponsor = ord.sponsorId || ord.sponsorCode || ord.referredBy || ord.sponsor || ord.refId || ord.referral || "";
 
@@ -106,7 +101,6 @@ export default function AdminOrdersPage() {
             <span className="text-[10px] text-gray-500 block font-medium">💳 {ord.paymentMethod || "COD"}</span>
           </div>
 
-          {/* যদি রেফারেন্স থাকে তবেই দেখাবে */}
           {sponsor && (
             <div className="text-right">
               <span className="text-[9px] font-bold text-amber-600 block uppercase">Referral</span>
@@ -117,7 +111,7 @@ export default function AdminOrdersPage() {
           )}
         </div>
 
-        {/* অ্যাডমিন অ্যাকশন বাটনসমূহ (একদম কমপ্যাক্ট) */}
+        {/* অ্যাকশন বাটন */}
         <div className="no-print grid grid-cols-3 gap-1 pt-1.5 border-t border-gray-100">
           <button onClick={() => handleUpdateStatus(ord.orderId, "Paid")} className="py-1.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-black text-[9px] uppercase rounded transition-all cursor-pointer">
             ✅ Paid
@@ -133,10 +127,66 @@ export default function AdminOrdersPage() {
     );
   };
 
+  // 🟢 ২. ম্যান আইডি এবং প্রোডাক্ট আইডির জন্য সুন্দর স্লিম লিস্ট রো (List Row View)
+  const OrderListRow = ({ ord }) => {
+    const sponsor = ord.sponsorId || ord.sponsorCode || ord.referredBy || ord.sponsor || ord.refId || ord.referral || "";
+
+    return (
+      <div className="bg-white hover:bg-slate-50 transition-colors p-3.5 rounded-xl border border-gray-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        
+        {/* লেফট সাইড: অর্ডার আইডি ও নাম */}
+        <div className="flex items-center gap-4 min-w-[200px]">
+          <span className="font-black text-gray-900 font-mono bg-slate-100 px-2 py-1 rounded border border-slate-200">{ord.orderId || ord.orderNo}</span>
+          <div>
+            <p className="font-black text-gray-800">{ord.customerName}</p>
+            <p className="text-[10px] text-gray-400">{new Date(ord.createdAt).toLocaleDateString()}</p>
+          </div>
+        </div>
+
+        {/* অ্যামাউন্ট ও রেফারেল */}
+        <div className="flex items-center gap-6">
+          <span className="font-black text-[#00875A] text-sm">৳{ord.totalAmount || 0}</span>
+          
+          {sponsor ? (
+            <span className="font-mono bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200 font-bold text-[10px]">
+              🤝 {sponsor}
+            </span>
+          ) : (
+            <span className="text-gray-300 font-bold text-[10px]">কোনো রেফারেন্স নেই</span>
+          )}
+        </div>
+
+        {/* স্ট্যাটাস ব্যাজ ও ড্রপডাউন/অ্যাকশন */}
+        <div className="flex items-center gap-3">
+          <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${
+            ord.status === "Paid" ? "bg-emerald-100 text-emerald-700" :
+            ord.status === "Cancelled" ? "bg-rose-100 text-rose-700" :
+            ord.status === "Delivered" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+          }`}>
+            {ord.status || "Pending"}
+          </span>
+
+          {/* ছোট্ট একশন বাটন */}
+          <div className="no-print flex items-center gap-1">
+            <button onClick={() => handleUpdateStatus(ord.orderId, "Paid")} title="Paid" className="px-2 py-1 bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-[10px] rounded transition-all cursor-pointer">
+              ✅
+            </button>
+            <button onClick={() => handleUpdateStatus(ord.orderId, "Delivered")} title="Delivered" className="px-2 py-1 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 font-bold text-[10px] rounded transition-all cursor-pointer">
+              📦
+            </button>
+            <button onClick={() => handleUpdateStatus(ord.orderId, "Cancelled")} title="Cancel" className="px-2 py-1 bg-rose-50 hover:bg-rose-500 text-rose-700 hover:text-white border border-rose-200 font-bold text-[10px] rounded transition-all cursor-pointer">
+              ❌
+            </button>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
   return (
     <main className="p-4 sm:p-6 font-sans text-gray-800 space-y-6 bg-slate-100 min-h-screen">
       
-      {/* টোস্ট নোটিফিকেশন কন্টেইনার */}
       <Toaster position="top-right" reverseOrder={false} />
 
       {/* টপ হেডার */}
@@ -160,7 +210,7 @@ export default function AdminOrdersPage() {
       ) : (
         <div className="space-y-6">
           
-          {/* ১. সবার উপরে: ওভারঅল বা মোট অর্ডারগুলোর কমপ্যাক্ট গ্রিড */}
+          {/* ১. সবার উপরে: ওভারঅল অর্ডার লিস্ট (কমপ্যাক্ট কার্ড গ্রিড) */}
           <div className="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden flex flex-col">
             <div className="bg-gray-800 px-4 py-3 text-white flex justify-between items-center">
               <h2 className="text-sm font-black flex items-center gap-2">🌐 ওভারঅল অর্ডার লিস্ট (Total Orders)</h2>
@@ -179,39 +229,35 @@ export default function AdminOrdersPage() {
           </div>
 
           
-          {/* ২. তার নিচে: ম্যান আইডি (M) এবং প্রোডাক্ট আইডি (P) এর আলাদা সেকশন */}
+          {/* ২. তার নিচে: ম্যান আইডি (M) এবং প্রোডাক্ট আইডি (P) এর স্লিম লিস্ট ভিউ */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             
-            {/* বাম পাশ: ম্যান আইডি (Man ID) */}
-            <div className="bg-white rounded-2xl shadow-xs border border-purple-200 overflow-hidden flex flex-col h-[70vh]">
+            {/* বাম পাশ: ম্যান আইডি (Man ID) - লিস্ট ভিউ */}
+            <div className="bg-white rounded-2xl shadow-xs border border-purple-200 overflow-hidden flex flex-col h-[65vh]">
               <div className="bg-purple-600 px-4 py-3 text-white flex justify-between items-center shrink-0">
-                <h2 className="text-sm font-black flex items-center gap-2">👤 ম্যান আইডি (Man ID - M) অর্ডার</h2>
+                <h2 className="text-sm font-black flex items-center gap-2">👤 ম্যান আইডি (Man ID - M) লিস্ট</h2>
                 <span className="bg-white text-purple-700 px-2.5 py-0.5 rounded-full text-[10px] font-black">{manIdOrders.length} টি</span>
               </div>
               
-              <div className="p-4 overflow-y-auto bg-purple-50/20 flex-1 custom-scroll">
+              <div className="p-4 overflow-y-auto bg-purple-50/20 flex-1 space-y-2.5 custom-scroll">
                 {manIdOrders.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {manIdOrders.map(ord => <SlimOrderCard key={ord.orderId || ord._id} ord={ord} />)}
-                  </div>
+                  manIdOrders.map(ord => <OrderListRow key={ord.orderId || ord._id} ord={ord} />)
                 ) : (
                   <p className="text-center text-purple-400 py-16 font-bold text-xs">কোনো ম্যান আইডি অর্ডার নেই</p>
                 )}
               </div>
             </div>
 
-            {/* ডান পাশ: প্রোডাক্ট আইডি (Product ID) */}
-            <div className="bg-white rounded-2xl shadow-xs border border-blue-200 overflow-hidden flex flex-col h-[70vh]">
+            {/* ডান পাশ: প্রোডাক্ট আইডি (Product ID) - লিস্ট ভিউ */}
+            <div className="bg-white rounded-2xl shadow-xs border border-blue-200 overflow-hidden flex flex-col h-[65vh]">
               <div className="bg-blue-600 px-4 py-3 text-white flex justify-between items-center shrink-0">
-                <h2 className="text-sm font-black flex items-center gap-2">📦 প্রোডাক্ট আইডি (Product ID - P) অর্ডার</h2>
+                <h2 className="text-sm font-black flex items-center gap-2">📦 প্রোডাক্ট আইডি (Product ID - P) লিস্ট</h2>
                 <span className="bg-white text-blue-700 px-2.5 py-0.5 rounded-full text-[10px] font-black">{productIdOrders.length} টি</span>
               </div>
               
-              <div className="p-4 overflow-y-auto bg-blue-50/20 flex-1 custom-scroll">
+              <div className="p-4 overflow-y-auto bg-blue-50/20 flex-1 space-y-2.5 custom-scroll">
                 {productIdOrders.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {productIdOrders.map(ord => <SlimOrderCard key={ord.orderId || ord._id} ord={ord} />)}
-                  </div>
+                  productIdOrders.map(ord => <OrderListRow key={ord.orderId || ord._id} ord={ord} />)
                 ) : (
                   <p className="text-center text-blue-400 py-16 font-bold text-xs">কোনো প্রোডাক্ট আইডি অর্ডার নেই</p>
                 )}
