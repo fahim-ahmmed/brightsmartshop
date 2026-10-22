@@ -32,7 +32,7 @@ const LEVEL_CONFIG = [
 
 async function processOrderToGlobalChain(orderData) {
   const { userId, userName, points } = orderData;
-  const packagesGenerated = Math.floor(points / 40);
+  const packagesGenerated = Math.floor(points / 40); // ৪০ পয়েন্ট = ১ প্যাকেজ
 
   if (packagesGenerated <= 0) return;
 
@@ -117,6 +117,7 @@ async function processOrderToGlobalChain(orderData) {
   }
 }
 
+// 🟢 ১. অর্ডার তৈরি (পয়েন্ট এখন এখানে যোগ হবে না)
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -155,18 +156,14 @@ export async function POST(req) {
       isManId: isManId, 
       status: body.status || "Pending", 
       paymentStatus: body.paymentStatus || "Unpaid",
+      isPointsProcessed: false, // 🟢 পয়েন্ট এখনো দেওয়া হয়নি ফ্ল্যাগ
       createdAt: new Date(),
     };
 
     const result = await ordersCollection.insertOne(newOrder);
 
-    if (points > 0) {
-      await processOrderToGlobalChain({
-        userId: userId,
-        userName: body.customerName,
-        points: points,
-      });
-    }
+    // ❌ processOrderToGlobalChain এখান থেকে সরিয়ে দেওয়া হয়েছে
+    // এটি এখন PATCH মেথডে (Delivered হলে) কাজ করবে
 
     return NextResponse.json({
       success: true,
@@ -207,29 +204,57 @@ export async function GET(req) {
   }
 }
 
+// 🟢 ২. স্ট্যাটাস আপডেট এবং পয়েন্ট/লেভেল লজিক
 export async function PATCH(req) {
   try {
     const { orderId, orderNo, status, paymentStatus } = await req.json();
 
     const client = await clientPromise;
     const db = client.db();
+    const ordersCollection = db.collection("orders");
+
+    const targetId = orderId || orderNo;
+    const query = { 
+      $or: [
+        { orderId: targetId }, 
+        { orderNo: targetId },
+        ...(ObjectId.isValid(targetId) ? [{ _id: new ObjectId(targetId) }] : [])
+      ] 
+    };
+
+    // অর্ডারের বর্তমান অবস্থা চেক করা
+    const existingOrder = await ordersCollection.findOne(query);
+
+    if (!existingOrder) {
+      return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
+    }
 
     const updateDoc = {};
     if (status) updateDoc.status = status;
     if (paymentStatus) updateDoc.paymentStatus = paymentStatus;
 
-    const targetId = orderId || orderNo;
+    // 🟢 যদি স্ট্যাটাস "Delivered" করা হয় এবং আগে পয়েন্ট দেওয়া না হয়ে থাকে
+    if (
+      status && 
+      (status.toLowerCase() === "delivered" || status.toLowerCase() === "deliv") && 
+      !existingOrder.isPointsProcessed
+    ) {
+      const points = Number(existingOrder.totalPoints || existingOrder.points || 0);
+      
+      // শুধুমাত্র ৪০ বা তার বেশি পয়েন্ট থাকলেই লেভেল বা গ্লোবাল চেইন কাজ করবে
+      if (points >= 40) {
+        await processOrderToGlobalChain({
+          userId: existingOrder.userId,
+          userName: existingOrder.customerName || existingOrder.name || "Customer",
+          points: points,
+        });
+        
+        // পয়েন্ট দেওয়া হয়ে গেছে সেটি মার্ক করা
+        updateDoc.isPointsProcessed = true; 
+      }
+    }
 
-    const result = await db.collection("orders").updateOne(
-      { 
-        $or: [
-          { orderId: targetId }, 
-          { orderNo: targetId },
-          ...(ObjectId.isValid(targetId) ? [{ _id: new ObjectId(targetId) }] : [])
-        ] 
-      },
-      { $set: updateDoc }
-    );
+    const result = await ordersCollection.updateOne(query, { $set: updateDoc });
 
     return NextResponse.json({ success: true, updated: result.modifiedCount });
   } catch (error) {
@@ -238,7 +263,6 @@ export async function PATCH(req) {
   }
 }
 
-// 🟢 ডিলিট রিকোয়েস্ট হ্যান্ডেল করার জন্য সঠিক DELETE মেথড
 export async function DELETE(req) {
   try {
     const { searchParams } = new URL(req.url);

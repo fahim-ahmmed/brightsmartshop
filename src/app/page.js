@@ -15,12 +15,65 @@ const DEFAULT_MAIN_CATEGORIES = [
   { name: "Home & Kitchen", slug: "home-kitchen", icon: "🍳", image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80" },
 ];
 
-if (typeof window !== "undefined") {
-  window.__BSS_CACHE__ = window.__BSS_CACHE__ || {
-    products: null,
-    categories: null,
-    banners: null,
-  };
+// 🟢 আনলিমিটেড ব্রাউজার ডাটাবেস (IndexedDB) + মেমোরি হেল্পার
+const IDB_NAME = "BSS_INSTANT_DB";
+const IDB_STORE = "store_cache";
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) return reject("No IDB");
+    const req = window.indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveToIDB(key, val) {
+  try {
+    if (typeof window !== "undefined") {
+      window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+      window.__BSS_CACHE__[key] = val;
+      try { localStorage.setItem(`bss_${key}`, JSON.stringify(val)); } catch (e) {}
+    }
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(val, key);
+  } catch (e) {}
+}
+
+async function getFromIDB(key) {
+  try {
+    const db = await openIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function getSyncCache(key) {
+  if (typeof window === "undefined") return null;
+  if (window.__BSS_CACHE__?.[key]?.length > 0) return window.__BSS_CACHE__[key];
+  try {
+    const item = localStorage.getItem(`bss_${key}`) || sessionStorage.getItem(`bss_${key}`);
+    if (item) {
+      const parsed = JSON.parse(item);
+      window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+      window.__BSS_CACHE__[key] = parsed;
+      return parsed;
+    }
+  } catch (e) {}
+  return null;
 }
 
 export default function HomePage() {
@@ -28,10 +81,9 @@ export default function HomePage() {
   const cartContext = useCart();
   const addToCart = cartContext?.addToCart || (() => {});
 
-  const cachedProducts = typeof window !== "undefined" ? window.__BSS_CACHE__?.products : null;
+  const initialProds = getSyncCache("products");
 
-  const [products, setProducts] = useState(cachedProducts || []);
-  const [loading, setLoading] = useState(!cachedProducts);
+  const [products, setProducts] = useState(initialProds || []);
   const [heroBanners, setHeroBanners] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [mainCategories, setMainCategories] = useState(DEFAULT_MAIN_CATEGORIES);
@@ -41,7 +93,48 @@ export default function HomePage() {
       router.prefetch(`/category/${cat.slug}`);
     });
 
-    async function preloadEntireProject() {
+    // ১. প্রথমেই IndexedDB থেকে ৫ মিলিসেকেন্ডে প্রোডাক্ট তুলে আনা (যদি বড় ছবির কারণে localStorage-এ না থাকে)
+    async function loadInstantFromBrowserDB() {
+      if (!initialProds || initialProds.length === 0) {
+        const idbProds = await getFromIDB("products");
+        if (idbProds && idbProds.length > 0) {
+          window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+          window.__BSS_CACHE__.products = idbProds;
+          setProducts(idbProds);
+        }
+      }
+      const idbCats = await getFromIDB("categories");
+      if (idbCats && idbCats.length > 0) {
+        window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+        window.__BSS_CACHE__.categories = idbCats;
+        mergeMainCategories(idbCats);
+      }
+    }
+
+    function mergeMainCategories(allCats) {
+      const dbMainCats = allCats.filter((c) => !c.parentCategory && !c.parentSlug);
+      const merged = DEFAULT_MAIN_CATEGORIES.map((defCat) => {
+        const found = dbMainCats.find(
+          (dbCat) =>
+            dbCat.slug?.toLowerCase() === defCat.slug ||
+            dbCat.name?.toLowerCase() === defCat.name.toLowerCase()
+        );
+        return found ? { ...defCat, ...found, slug: defCat.slug } : defCat;
+      });
+
+      const extraCats = dbMainCats.filter(
+        (dbCat) =>
+          !DEFAULT_MAIN_CATEGORIES.some(
+            (defCat) =>
+              defCat.slug === dbCat.slug?.toLowerCase() ||
+              defCat.name.toLowerCase() === dbCat.name?.toLowerCase()
+          )
+      );
+      setMainCategories([...merged, ...extraCats]);
+    }
+
+    // ২. ব্যাকগ্রাউন্ডে সার্ভারের সাথে সাইলেন্ট সিংক
+    async function syncWithServer() {
       try {
         const [prodRes, catRes, bannerRes] = await Promise.all([
           fetch("/api/admin/products"),
@@ -53,44 +146,14 @@ export default function HomePage() {
           const prodData = await prodRes.json();
           const prodList = prodData.products || [];
           setProducts(prodList);
-          if (typeof window !== "undefined") {
-            window.__BSS_CACHE__.products = prodList;
-            try {
-              sessionStorage.setItem("bss_products", JSON.stringify(prodList));
-            } catch (e) {}
-          }
+          saveToIDB("products", prodList);
         }
 
         if (catRes.ok) {
           const catData = await catRes.json();
           const allCats = catData.categories || catData || [];
-          if (typeof window !== "undefined") {
-            window.__BSS_CACHE__.categories = allCats;
-            try {
-              sessionStorage.setItem("bss_categories", JSON.stringify(allCats));
-            } catch (e) {}
-          }
-
-          const dbMainCats = allCats.filter((c) => !c.parentCategory && !c.parentSlug);
-          const merged = DEFAULT_MAIN_CATEGORIES.map((defCat) => {
-            const found = dbMainCats.find(
-              (dbCat) =>
-                dbCat.slug?.toLowerCase() === defCat.slug ||
-                dbCat.name?.toLowerCase() === defCat.name.toLowerCase()
-            );
-            return found ? { ...defCat, ...found, slug: defCat.slug } : defCat;
-          });
-
-          const extraCats = dbMainCats.filter(
-            (dbCat) =>
-              !DEFAULT_MAIN_CATEGORIES.some(
-                (defCat) =>
-                  defCat.slug === dbCat.slug?.toLowerCase() ||
-                  defCat.name.toLowerCase() === dbCat.name?.toLowerCase()
-              )
-          );
-
-          setMainCategories([...merged, ...extraCats]);
+          saveToIDB("categories", allCats);
+          mergeMainCategories(allCats);
         }
 
         if (bannerRes.ok) {
@@ -99,13 +162,12 @@ export default function HomePage() {
           setHeroBanners(activeBanners);
         }
       } catch (err) {
-        console.error("Preload error:", err);
-      } finally {
-        setLoading(false);
+        console.error("Background sync error:", err);
       }
     }
 
-    preloadEntireProject();
+    loadInstantFromBrowserDB();
+    syncWithServer();
   }, [router]);
 
   const displayBanners =
@@ -166,8 +228,9 @@ export default function HomePage() {
     "bg-[#EEF2FF] border-[#E0E7FF]",
   ];
 
-  // 🟢 শুধুমাত্র বাছাই করা (isPopular === true) প্রোডাক্টগুলো হোমপেজের জন্য ফিল্টার করা হলো
-  const popularProducts = products.filter((p) => Boolean(p.isPopular));
+  // যদি অ্যাডমিন থেকে কোনো প্রোডাক্ট Popular সিলেক্ট করা থাকে তবে সেগুলো দেখাবে, না থাকলে সব প্রোডাক্টই সাথে সাথে দেখাবে
+  const popularFiltered = products.filter((p) => Boolean(p.isPopular));
+  const popularProducts = popularFiltered.length > 0 ? popularFiltered : products;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-gray-800 flex flex-col justify-between">
@@ -276,7 +339,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 🟢 POPULAR PRODUCTS (শুধুমাত্র বাছাই করা প্রোডাক্টগুলো এখানে দেখাবে) */}
+        {/* POPULAR PRODUCTS (কোনো লোডিং স্পিনার ছাড়া তাৎক্ষণিক প্রদর্শন) */}
         <section className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-6">
           <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-4">
             <h2 className="text-2xl sm:text-3xl font-black text-[#00875A] tracking-tight">
@@ -284,100 +347,81 @@ export default function HomePage() {
             </h2>
           </div>
 
-          {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-5">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <div key={n} className="h-72 bg-white rounded-3xl p-4 border border-gray-100 animate-pulse flex flex-col justify-between">
-                  <div className="w-full h-44 bg-gray-200 rounded-2xl"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-8 bg-gray-200 rounded-xl w-full"></div>
-                </div>
-              ))}
-            </div>
-          ) : popularProducts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-              {popularProducts.map((p) => {
-                const prodId = p._id || p.id;
-                const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
-                const sellPrice = Number(p.price || 0);
-                const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+            {popularProducts.map((p) => {
+              const prodId = p._id || p.id;
+              const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
+              const sellPrice = Number(p.price || 0);
+              const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
 
-                return (
-                  <div
-                    key={prodId}
-                    className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+              return (
+                <div
+                  key={prodId}
+                  className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+                >
+                  {saveAmount > 0 && (
+                    <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                      SAVE ৳{saveAmount}
+                    </span>
+                  )}
+                  <Link
+                    href={`/shop/${prodId}`}
+                    className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
                   >
-                    {saveAmount > 0 && (
-                      <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
-                        SAVE ৳{saveAmount}
+                    <img
+                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                      alt={p.title}
+                      loading="eager"
+                      decoding="async"
+                      className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </Link>
+                  <div className="space-y-1 mb-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                        {p.subCategoryName || p.subCategory || p.categoryName || p.category || "General"}
                       </span>
-                    )}
-                    <Link
-                      href={`/shop/${prodId}`}
-                      className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
-                    >
-                      <img
-                        src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
-                        alt={p.title}
-                        className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
-                      />
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                        📦 {p.unit || p.weight || "1 Pcs"}
+                      </span>
+                    </div>
+                    <Link href={`/shop/${prodId}`}>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
+                        {p.title}
+                      </h3>
                     </Link>
-                    <div className="space-y-1 mb-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                          {p.subCategoryName || p.subCategory || p.categoryName || p.category || "General"}
-                        </span>
-                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                          📦 {p.unit || p.weight || "1 Pcs"}
-                        </span>
-                      </div>
-                      <Link href={`/shop/${prodId}`}>
-                        <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
-                          {p.title}
-                        </h3>
-                      </Link>
-                    </div>
-                    <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
-                        {saveAmount > 0 && (
-                          <span className="text-[11px] text-gray-400 line-through font-bold">
-                            ৳{oldPrice}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs font-bold text-gray-700">
-                        +{Math.floor(Number(p.points || p.point || 0))} Points
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleAddToCartOnly(p)}
-                        className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                      >
-                        🛒 Cart
-                      </button>
-                      <button
-                        onClick={() => handleBuyNow(p)}
-                        className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
-                      >
-                        ⚡ Buy Now
-                      </button>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-2xs space-y-2">
-              <p className="text-sm font-bold text-gray-600">
-                হোমপেজের জন্য এখনো কোনো Popular Product বাছাই করা হয়নি।
-              </p>
-              <p className="text-xs text-gray-400">
-                উপরের যেকোনো ক্যাটাগরিতে ক্লিক করে সব প্রোডাক্ট দেখুন অথবা অ্যাডমিন প্যানেল থেকে প্রোডাক্ট হোমপেজে যুক্ত করুন।
-              </p>
-            </div>
-          )}
+                  <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
+                      {saveAmount > 0 && (
+                        <span className="text-[11px] text-gray-400 line-through font-bold">
+                          ৳{oldPrice}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-gray-700">
+                      +{Math.floor(Number(p.points || p.point || 0))} Points
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleAddToCartOnly(p)}
+                      className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                    >
+                      🛒 Cart
+                    </button>
+                    <button
+                      onClick={() => handleBuyNow(p)}
+                      className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
+                    >
+                      ⚡ Buy Now
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
       </main>
     </div>

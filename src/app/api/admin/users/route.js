@@ -8,11 +8,18 @@ export async function GET() {
     const client = await clientPromise;
     const db = client.db();
     
-    // প্রথমে 'users' কালেকশন চেক করা, না পেলে 'user' কালেকশন চেক করবে
-    let users = await db.collection("users").find({}).sort({ createdAt: -1 }).toArray();
+    // অ্যাডমিন বাদে বাকি সব ইউজার আনবে (আপনার ১০টি টপ আইডিও এখানে চলে আসবে)
+    let users = await db.collection("users")
+      .find({ role: { $ne: "admin" } })
+      .sort({ createdAt: -1 })
+      .toArray();
     
+    // প্রথমে 'users' কালেকশন চেক করা, না পেলে 'user' কালেকশন চেক করবে
     if (!users || users.length === 0) {
-      users = await db.collection("user").find({}).sort({ createdAt: -1 }).toArray();
+      users = await db.collection("user")
+        .find({ role: { $ne: "admin" } })
+        .sort({ createdAt: -1 })
+        .toArray();
     }
 
     return NextResponse.json({ success: true, users });
@@ -55,7 +62,7 @@ export async function PATCH(req) {
     // 'users' কালেকশনে চেষ্টা করা
     let result = await db.collection("users").updateOne(query, { $set: updateData }).catch(() => null);
     
-    // না পাওয়া গেলে 'user' কালেকশনে চেষ্টা করা
+    // না পাওয়া গেলে 'user' কালেকশনে চেষ্টা করা
     if (!result || result.matchedCount === 0) {
       result = await db.collection("user").updateOne(query, { $set: updateData }).catch(() => null);
     }

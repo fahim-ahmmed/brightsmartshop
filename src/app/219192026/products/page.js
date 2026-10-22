@@ -29,7 +29,7 @@ export default function AdminProductsPage() {
     unit: "1 Pcs",
     stock: "",
     description: "",
-    isPopular: false, // 🟢 ডিফল্টভাবে হোমপেজে যাবে না, শুধু ক্যাটাগরিতে থাকবে
+    isPopular: false,
   });
 
   const [imagePreview, setImagePreview] = useState("");
@@ -121,13 +121,40 @@ export default function AdminProductsPage() {
     loadProducts();
   }, []);
 
+  // 🟢 ছবি আপলোডের সময় স্বয়ংক্রিয়ভাবে আল্ট্রা-ফাস্ট WebP ফরম্যাটে কম্প্রেস করার ফাংশন
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result);
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_SIZE = 550; // ই-কমার্স কার্ডের জন্য পারফেক্ট এইচডি সাইজ
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > MAX_SIZE) {
+          height = Math.round((height * MAX_SIZE) / width);
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width = Math.round((width * MAX_SIZE) / height);
+          height = MAX_SIZE;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 75% কোয়ালিটিতে WebP কম্প্রেশন (৩ MB ছবি হয়ে যাবে মাত্র ২৫ KB!)
+        const compressedBase64 = canvas.toDataURL("image/webp", 0.75);
+        setImagePreview(compressedBase64);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddProduct = async (e) => {
@@ -158,7 +185,7 @@ export default function AdminProductsPage() {
         points: Math.floor(Number(form.points || 0)),
         unit: form.unit || "1 Pcs",
         stock: Number(form.stock || 100),
-        isPopular: Boolean(form.isPopular), // 🟢 পপুলার অপশন পাঠানো হচ্ছে
+        isPopular: Boolean(form.isPopular),
         image: imagePreview || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80",
       };
 
@@ -169,7 +196,6 @@ export default function AdminProductsPage() {
       });
 
       if (res.ok) {
-        // ব্রাউজার ক্যাশ ক্লিয়ার যাতে সাথে সাথে হোমপেজে আপডেট দেখা যায়
         if (typeof window !== "undefined") {
           window.__BSS_CACHE__ = { products: null, categories: null, banners: null };
           try { sessionStorage.removeItem("bss_products"); } catch (e) {}
@@ -202,7 +228,6 @@ export default function AdminProductsPage() {
     }
   };
 
-  // 🟢 যেকোনো প্রোডাক্টকে এক ক্লিকে Popular Products-এ যুক্ত বা রিমুভ করার ফাংশন
   const handleTogglePopular = async (product) => {
     const newStatus = !product.isPopular;
     try {
@@ -385,7 +410,6 @@ export default function AdminProductsPage() {
             />
           </div>
 
-          {/* 🟢 হোমপেজের Popular Products সেকশনে দেখানোর বিশেষ ফিল্ড */}
           <div className="lg:col-span-4 bg-[#0F172A] border-2 border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <label className="text-sm font-black text-amber-400 flex items-center gap-2 cursor-pointer">
@@ -445,7 +469,6 @@ export default function AdminProductsPage() {
         </form>
       </div>
 
-      {/* Live Products List */}
       <div className="bg-[#1E293B] p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
         <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-4">
           Live Published Products ({products.length})
@@ -480,7 +503,6 @@ export default function AdminProductsPage() {
               </div>
 
               <div className="flex justify-between items-center pt-2 border-t border-slate-800 gap-2">
-                {/* 🟢 এক ক্লিকে পুরনো প্রোডাক্ট Popular অন/অফ করার বাটন */}
                 <button
                   type="button"
                   onClick={() => handleTogglePopular(p)}

@@ -18,6 +18,71 @@ const MAIN_CATEGORY_TITLES = {
 const norm = (str) =>
   str ? String(str).trim().toLowerCase().replace(/[\s_-]+/g, "") : "";
 
+const IDB_NAME = "BSS_INSTANT_DB";
+const IDB_STORE = "store_cache";
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) return reject("No IDB");
+    const req = window.indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveToIDB(key, val) {
+  try {
+    if (typeof window !== "undefined") {
+      window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+      window.__BSS_CACHE__[key] = val;
+      try { localStorage.setItem(`bss_${key}`, JSON.stringify(val)); } catch (e) {}
+    }
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(val, key);
+  } catch (e) {}
+}
+
+async function getFromIDB(key) {
+  try {
+    const db = await openIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function getSyncCache() {
+  if (typeof window === "undefined") return { categories: [], products: [] };
+  let categories = window.__BSS_CACHE__?.categories || [];
+  let products = window.__BSS_CACHE__?.products || [];
+
+  if (categories.length === 0) {
+    try {
+      const sCat = localStorage.getItem("bss_categories") || sessionStorage.getItem("bss_categories");
+      if (sCat) categories = JSON.parse(sCat);
+    } catch (e) {}
+  }
+  if (products.length === 0) {
+    try {
+      const sProd = localStorage.getItem("bss_products") || sessionStorage.getItem("bss_products");
+      if (sProd) products = JSON.parse(sProd);
+    } catch (e) {}
+  }
+  return { categories, products };
+}
+
 export default function CategoryPage({ params }) {
   const resolvedParams = use(params);
   const slug = decodeURIComponent(resolvedParams?.slug || "").trim().toLowerCase();
@@ -29,28 +94,7 @@ export default function CategoryPage({ params }) {
   const cartContext = useCart();
   const addToCart = cartContext?.addToCart || (() => {});
 
-  // ব্রাউজার মেমোরি বা সেশন স্টোরেজ থেকে সাথে সাথে ক্যাশ ডাটা তুলে নেওয়া (কোনো ওয়েটিং টাইম নেই)
-  const getCachedData = () => {
-    if (typeof window === "undefined") return { categories: [], products: [] };
-    let categories = window.__BSS_CACHE__?.categories || [];
-    let products = window.__BSS_CACHE__?.products || [];
-
-    if (categories.length === 0) {
-      try {
-        const sCat = sessionStorage.getItem("bss_categories");
-        if (sCat) categories = JSON.parse(sCat);
-      } catch (e) {}
-    }
-    if (products.length === 0) {
-      try {
-        const sProd = sessionStorage.getItem("bss_products");
-        if (sProd) products = JSON.parse(sProd);
-      } catch (e) {}
-    }
-    return { categories, products };
-  };
-
-  const initial = getCachedData();
+  const initial = getSyncCache();
   const [rawCategories, setRawCategories] = useState(initial.categories);
   const [rawProducts, setRawProducts] = useState(initial.products);
   const [selectedSub, setSelectedSub] = useState(subQuery);
@@ -59,8 +103,20 @@ export default function CategoryPage({ params }) {
     setSelectedSub(subQuery);
   }, [subQuery]);
 
-  // ব্যাকগ্রাউন্ডে সাইলেন্ট সিংক (ইউজারকে লোডিং দেখাবে না)
   useEffect(() => {
+    // ১. ব্রাউজার ডাটাবেস (IndexedDB) থেকে সাথে সাথে লোড
+    async function loadFromBrowserDB() {
+      if (rawCategories.length === 0) {
+        const idbCats = await getFromIDB("categories");
+        if (idbCats?.length > 0) setRawCategories(idbCats);
+      }
+      if (rawProducts.length === 0) {
+        const idbProds = await getFromIDB("products");
+        if (idbProds?.length > 0) setRawProducts(idbProds);
+      }
+    }
+
+    // ২. ব্যাকগ্রাউন্ডে সাইলেন্ট আপডেট
     async function backgroundSync() {
       try {
         const [catRes, prodRes] = await Promise.all([
@@ -71,28 +127,20 @@ export default function CategoryPage({ params }) {
           const cData = await catRes.json();
           const cList = cData.categories || cData || [];
           setRawCategories(cList);
-          if (typeof window !== "undefined") {
-            window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
-            window.__BSS_CACHE__.categories = cList;
-            try { sessionStorage.setItem("bss_categories", JSON.stringify(cList)); } catch (e) {}
-          }
+          saveToIDB("categories", cList);
         }
         if (prodRes.ok) {
           const pData = await prodRes.json();
           const pList = pData.products || pData || [];
           setRawProducts(pList);
-          if (typeof window !== "undefined") {
-            window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
-            window.__BSS_CACHE__.products = pList;
-            try { sessionStorage.setItem("bss_products", JSON.stringify(pList)); } catch (e) {}
-          }
+          saveToIDB("products", pList);
         }
       } catch (e) {}
     }
-    if (rawCategories.length === 0 || rawProducts.length === 0) {
-      backgroundSync();
-    }
-  }, []);
+
+    loadFromBrowserDB();
+    backgroundSync();
+  }, [slug]);
 
   const currentCat = rawCategories.find(
     (c) => norm(c.slug) === norm(slug) || norm(c.name) === norm(slug)
@@ -265,6 +313,7 @@ export default function CategoryPage({ params }) {
                     <img
                       src={sub.image || "/hero1.jpg"}
                       alt={sub.name}
+                      loading="eager"
                       className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                     />
                     {isCurrent && (
@@ -295,100 +344,91 @@ export default function CategoryPage({ params }) {
           </div>
         </div>
 
-        {/* প্রোডাক্ট গ্রিড (কোনো লোডিং স্ক্রিন বা অপেক্ষা নেই) */}
-        {displayedProducts.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-            {displayedProducts.map((p) => {
-              const prodId = p._id || p.id;
-              const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
-              const sellPrice = Number(p.price || 0);
-              const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
+        {/* প্রোডাক্ট গ্রিড */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+          {displayedProducts.map((p) => {
+            const prodId = p._id || p.id;
+            const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
+            const sellPrice = Number(p.price || 0);
+            const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
 
-              return (
-                <div
-                  key={prodId}
-                  className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+            return (
+              <div
+                key={prodId}
+                className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+              >
+                {saveAmount > 0 && (
+                  <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                    SAVE ৳{saveAmount}
+                  </span>
+                )}
+
+                <Link
+                  href={`/shop/${prodId}`}
+                  className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
                 >
-                  {saveAmount > 0 && (
-                    <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
-                      SAVE ৳{saveAmount}
-                    </span>
-                  )}
+                  <img
+                    src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                    alt={p.title || p.name}
+                    loading="eager"
+                    decoding="async"
+                    className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
+                  />
+                </Link>
 
-                  <Link
-                    href={`/shop/${prodId}`}
-                    className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
-                  >
-                    <img
-                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
-                      alt={p.title || p.name}
-                      className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
-                    />
+                <div className="space-y-1 mb-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                      {p.subCategoryName || p.subCategory || p.categoryName || categoryName}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                      📦 {p.unit || p.weight || "1 Pcs"}
+                    </span>
+                  </div>
+
+                  <Link href={`/shop/${prodId}`}>
+                    <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
+                      {p.title || p.name}
+                    </h3>
                   </Link>
-
-                  <div className="space-y-1 mb-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                        {p.subCategoryName || p.subCategory || p.categoryName || categoryName}
-                      </span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                        📦 {p.unit || p.weight || "1 Pcs"}
-                      </span>
-                    </div>
-
-                    <Link href={`/shop/${prodId}`}>
-                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
-                        {p.title || p.name}
-                      </h3>
-                    </Link>
-                  </div>
-
-                  <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
-                      {saveAmount > 0 && (
-                        <span className="text-[11px] text-gray-400 line-through font-bold">
-                          ৳{oldPrice}
-                        </span>
-                      )}
-                    </div>
-
-                    <span className="text-xs font-bold text-gray-700">
-                      +{Math.floor(Number(p.points || p.point || 0))} Points
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCartOnly(p)}
-                      className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                    >
-                      🛒 Cart
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleBuyNow(p)}
-                      className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
-                    >
-                      ⚡ Buy Now
-                    </button>
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-[#1E293B] rounded-3xl border border-slate-800 p-12 text-center space-y-4 shadow-sm">
-            <div className="text-5xl">📦</div>
-            <h3 className="text-lg font-bold text-white">No products found in this section</h3>
-            <p className="text-sm text-gray-400 max-w-md mx-auto">
-              We haven't added any products here yet. Please check other categories or browse the shop.
-            </p>
-          </div>
-        )}
 
+                <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
+                    {saveAmount > 0 && (
+                      <span className="text-[11px] text-gray-400 line-through font-bold">
+                        ৳{oldPrice}
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-xs font-bold text-gray-700">
+                    +{Math.floor(Number(p.points || p.point || 0))} Points
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAddToCartOnly(p)}
+                    className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                  >
+                    🛒 Cart
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBuyNow(p)}
+                    className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
+                  >
+                    ⚡ Buy Now
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </main>
   );

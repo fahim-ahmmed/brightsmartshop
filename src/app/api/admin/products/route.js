@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
 
+// 🟢 সার্ভার র‍্যামে স্থায়ী ক্যাশ (কখনোই মুছে যাবে না, সরাসরি মেমোরিতে আপডেট হবে)
 globalThis.__PRODUCTS_SERVER_CACHE__ = globalThis.__PRODUCTS_SERVER_CACHE__ || null;
-globalThis.__PRODUCTS_CACHE_TIME__ = globalThis.__PRODUCTS_CACHE_TIME__ || 0;
 
 async function connectDB() {
   if (mongoose.connection.readyState !== 1) {
@@ -11,27 +11,29 @@ async function connectDB() {
   }
 }
 
-// ১. সব প্রোডাক্ট লোড করা (GET)
+// ১. সুপার-ফাস্ট প্রোডাক্ট লোড API (0ms Server Memory Response)
 export async function GET() {
   try {
-    const now = Date.now();
-    if (
-      globalThis.__PRODUCTS_SERVER_CACHE__ &&
-      now - globalThis.__PRODUCTS_CACHE_TIME__ < 300000
-    ) {
-      return NextResponse.json({
-        success: true,
-        count: globalThis.__PRODUCTS_SERVER_CACHE__.length,
-        products: globalThis.__PRODUCTS_SERVER_CACHE__,
-        cached: true,
-      });
+    // র‍্যামে ডাটা থাকলে ডাটাবেসে না গিয়ে ০ মিলিসেকেন্ডে সাথে সাথে পাঠাবে
+    if (globalThis.__PRODUCTS_SERVER_CACHE__) {
+      return NextResponse.json(
+        {
+          success: true,
+          count: globalThis.__PRODUCTS_SERVER_CACHE__.length,
+          products: globalThis.__PRODUCTS_SERVER_CACHE__,
+          cached: true,
+        },
+        {
+          headers: {
+            "Cache-Control": "public, max-age=5, stale-while-revalidate=60",
+          },
+        }
+      );
     }
 
     await connectDB();
     const products = await Product.find({}).sort({ createdAt: -1 }).lean();
-
     globalThis.__PRODUCTS_SERVER_CACHE__ = products;
-    globalThis.__PRODUCTS_CACHE_TIME__ = now;
 
     return NextResponse.json({
       success: true,
@@ -47,7 +49,7 @@ export async function GET() {
   }
 }
 
-// ২. নতুন প্রোডাক্ট সেভ করা (POST)
+// ২. নতুন প্রোডাক্ট সেভ ও র‍্যামে সাথে সাথে যুক্ত করা (POST)
 export async function POST(req) {
   try {
     await connectDB();
@@ -90,14 +92,22 @@ export async function POST(req) {
       stock: Number(body.stock || 100),
       image: body.image || "📦",
       description: body.description || "",
-      isPopular: Boolean(body.isPopular), // 🟢 পপুলার স্ট্যাটাস সেভ
+      isPopular: Boolean(body.isPopular),
       isActive: body.isActive !== undefined ? body.isActive : true,
       isPermanent: body.isPermanent !== undefined ? body.isPermanent : true,
     });
 
-    globalThis.__PRODUCTS_SERVER_CACHE__ = null;
+    const plainProduct = newProduct.toObject();
 
-    return NextResponse.json({ success: true, product: newProduct });
+    // ক্যাশ মুছে না ফেলে সরাসরি র‍্যামের লিস্টে নতুন প্রোডাক্ট ঢুকিয়ে দেওয়া
+    if (globalThis.__PRODUCTS_SERVER_CACHE__) {
+      globalThis.__PRODUCTS_SERVER_CACHE__ = [
+        plainProduct,
+        ...globalThis.__PRODUCTS_SERVER_CACHE__,
+      ];
+    }
+
+    return NextResponse.json({ success: true, product: plainProduct });
   } catch (error) {
     console.error("Create product error:", error);
     return NextResponse.json(
@@ -107,7 +117,7 @@ export async function POST(req) {
   }
 }
 
-// 🟢 ৩. প্রোডাক্টের Popular স্ট্যাটাস অন/অফ করার API (PATCH)
+// ৩. প্রোডাক্টের Popular স্ট্যাটাস অন/অফ ও র‍্যাম আপডেট (PATCH)
 export async function PATCH(req) {
   try {
     await connectDB();
@@ -125,9 +135,13 @@ export async function PATCH(req) {
       id,
       { $set: { isPopular: Boolean(isPopular) } },
       { new: true }
-    );
+    ).lean();
 
-    globalThis.__PRODUCTS_SERVER_CACHE__ = null;
+    if (globalThis.__PRODUCTS_SERVER_CACHE__ && updated) {
+      globalThis.__PRODUCTS_SERVER_CACHE__ = globalThis.__PRODUCTS_SERVER_CACHE__.map(
+        (p) => (String(p._id) === String(id) ? updated : p)
+      );
+    }
 
     return NextResponse.json({ success: true, product: updated });
   } catch (error) {
@@ -139,7 +153,7 @@ export async function PATCH(req) {
   }
 }
 
-// ৪. প্রোডাক্ট ডিলিট করা (DELETE)
+// ৪. প্রোডাক্ট ডিলিট ও র‍্যাম থেকে সাথে সাথে সরানো (DELETE)
 export async function DELETE(req) {
   try {
     await connectDB();
@@ -154,7 +168,12 @@ export async function DELETE(req) {
     }
 
     await Product.findByIdAndDelete(id);
-    globalThis.__PRODUCTS_SERVER_CACHE__ = null;
+
+    if (globalThis.__PRODUCTS_SERVER_CACHE__) {
+      globalThis.__PRODUCTS_SERVER_CACHE__ = globalThis.__PRODUCTS_SERVER_CACHE__.filter(
+        (p) => String(p._id) !== String(id)
+      );
+    }
 
     return NextResponse.json({ success: true, message: "Product deleted successfully" });
   } catch (error) {

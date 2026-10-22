@@ -90,23 +90,43 @@ export default function MyAccountPage() {
     });
   };
 
-  // 📷 প্রোফাইল ছবি পিক/আপলোড হ্যান্ডলার
+  // 🟢 📷 প্রোফাইল ছবি পিক ও স্বয়ংক্রিয়ভাবে আল্ট্রা-ফাস্ট WebP কম্প্রেশন
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 3 * 1024 * 1024) {
-        setMessage({ type: "error", text: "ছবির সাইজ ৩ MB এর কম হতে হবে!" });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_SIZE = 400; // প্রোফাইল পিকচারের জন্য ৪০০px একদম পারফেক্ট
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > MAX_SIZE) {
+          height = Math.round((height * MAX_SIZE) / width);
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width = Math.round((width * MAX_SIZE) / height);
+          height = MAX_SIZE;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 75% কোয়ালিটিতে WebP কম্প্রেশন (৩ MB ছবি হয়ে যাবে মাত্র ১৫-২০ KB!)
+        const compressedBase64 = canvas.toDataURL("image/webp", 0.75);
         setFormData((prev) => ({
           ...prev,
-          profileImage: reader.result,
+          profileImage: compressedBase64,
         }));
       };
-      reader.readAsDataURL(file);
-    }
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSave = async (e) => {
@@ -123,10 +143,14 @@ export default function MyAccountPage() {
     };
 
     try {
+      // 🟢 ব্যাকএন্ডে রিকোয়েস্ট পাঠানোর সময় userId যুক্ত করে দেওয়া হলো
       const res = await fetch("/api/client/profile/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ 
+          ...formData, 
+          userId: userData.id 
+        }),
       });
 
       if (!res.ok) {
@@ -136,7 +160,7 @@ export default function MyAccountPage() {
 
       setUserData(updatedUserObj);
 
-      // 🟢 LocalStorage আপডেট এবং ন্যাভবারে লাইভ সিঙ্কের জন্য Event Trigger
+      // LocalStorage আপডেট এবং ন্যাভবারে লাইভ সিঙ্কের জন্য Event Trigger
       const savedUser = localStorage.getItem("bright_user");
       const currentLocal = savedUser ? JSON.parse(savedUser) : {};
       const newLocalData = { ...currentLocal, ...updatedUserObj };

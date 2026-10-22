@@ -7,8 +7,9 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState(""); // 🟢 সার্চ স্টেট
 
-  // 🟢 ইডিট মোডাল এর জন্য স্টেটসমূহ
+  // ইডিট মোডাল এর জন্য স্টেটসমূহ
   const [editingUser, setEditingUser] = useState(null);
   const [editForm, setEditForm] = useState({
     userId: "",
@@ -45,7 +46,34 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, []);
 
-  // 🟢 ১. ইডিট মোডাল ওপেন করা
+  // 🟢 সার্চ ফিল্টার লজিক
+  const filteredUsers = users.filter((u) => {
+    const q = searchTerm.toLowerCase();
+    return (
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.phone && u.phone.includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q))
+    );
+  });
+
+  // 🟢 সিরিয়াল ঠিক করার লজিক (১ থেকে ১০ পর্যন্ত সবার উপরে থাকবে)
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    // Top ID গুলোকে সবার উপরে রাখা
+    if (a.isSystemFounder && !b.isSystemFounder) return -1;
+    if (!a.isSystemFounder && b.isSystemFounder) return 1;
+
+    // যদি দুজনই Top ID হয়, তবে নামের শেষের সংখ্যা অনুযায়ী ১ থেকে ১০ সিরিয়াল করা
+    if (a.isSystemFounder && b.isSystemFounder) {
+      const numA = parseInt(a.name?.replace(/\D/g, "")) || 0;
+      const numB = parseInt(b.name?.replace(/\D/g, "")) || 0;
+      return numA - numB;
+    }
+
+    // সাধারণ ইউজারদের ক্ষেত্রে ডাটাবেসের ডিফল্ট সিরিয়াল ঠিক রাখা
+    return 0;
+  });
+
+  // ১. ইডিট মোডাল ওপেন করা
   const handleOpenEditModal = (user) => {
     setEditingUser(user);
     setEditForm({
@@ -57,7 +85,7 @@ export default function AdminUsersPage() {
     });
   };
 
-  // 🟢 ২. ইডিট ফর্ম সাবমিট করা
+  // ২. ইডিট ফর্ম সাবমিট করা
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     setUpdating(true);
@@ -73,15 +101,15 @@ export default function AdminUsersPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        toast.success(data.message || "তথ্য সফলভাবে আপডেট করা হয়েছে!", { id: toastId });
+        toast.success(data.message || "তথ্য সফলভাবে আপডেট করা হয়েছে!", { id: toastId });
         setEditingUser(null);
         fetchUsers(); // ইউজার লিস্ট সাথে সাথে রিফ্রেশ হবে
       } else {
-        toast.error(data.message || "আপডেট করতে সমস্যা হয়েছে।", { id: toastId });
+        toast.error(data.message || "আপডেট করতে সমস্যা হয়েছে।", { id: toastId });
       }
     } catch (err) {
       console.error("Update error:", err);
-      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
+      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
     } finally {
       setUpdating(false);
     }
@@ -146,6 +174,17 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      {/* 🟢 Search Box */}
+      <div className="bg-[#1E293B] p-4 rounded-2xl border border-slate-800">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="নাম বা ফোন নাম্বার দিয়ে খুঁজুন..."
+          className="w-full sm:w-96 bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+        />
+      </div>
+
       {/* Users Table */}
       <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-800 shadow-xl">
         {loading ? (
@@ -156,7 +195,7 @@ export default function AdminUsersPage() {
           <div className="py-10 text-center text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4">
             {error}
           </div>
-        ) : users.length > 0 ? (
+        ) : sortedUsers.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -171,16 +210,27 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {users.map((u, idx) => {
+                {sortedUsers.map((u, idx) => {
                   const uid = u._id || u.id;
                   return (
-                    <tr key={uid || idx}>
+                    <tr 
+                      key={uid || idx} 
+                      className={`transition-colors ${u.isSystemFounder ? "bg-amber-500/10 hover:bg-amber-500/20" : "hover:bg-slate-800/60"}`}
+                    >
                       <td className="py-3 text-slate-500 font-mono">{idx + 1}</td>
                       <td className="py-3 font-bold text-white flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 font-bold flex items-center justify-center text-xs border border-emerald-500/30">
                           {u.name ? u.name[0].toUpperCase() : "U"}
                         </div>
-                        <span>{u.name || "Customer User"}</span>
+                        <span className={u.isSystemFounder ? "text-amber-400" : ""}>
+                          {u.name || "Customer User"}
+                        </span>
+                        {/* 🟢 স্পেশাল ব্যাজ */}
+                        {u.isSystemFounder && (
+                          <span className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full uppercase shadow-md tracking-wider whitespace-nowrap">
+                            👑 Top ID
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 text-slate-300 font-mono font-bold text-emerald-400">
                         {getDisplayPhone(u)}
@@ -236,7 +286,7 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      {/* 🟢 EDIT USER POPUP MODAL */}
+      {/* EDIT USER POPUP MODAL */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
           <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl space-y-6 relative">
@@ -287,7 +337,7 @@ export default function AdminUsersPage() {
                   value={editForm.password}
                   onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                   className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-amber-300 focus:outline-none focus:border-emerald-500 font-mono"
-                  placeholder="নতুন পাসওয়ার্ড দিন"
+                  placeholder="নতুন পাসওয়ার্ড দিন"
                 />
               </div>
 
