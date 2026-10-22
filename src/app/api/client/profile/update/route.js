@@ -49,4 +49,4 @@ export async function PUT(req) {
 }
 
 // ফ্রন্টএন্ড থেকে কেউ যদি PATCH পাঠায়, সেটাও যেন কাজ করে
-export const PATCH = PUT;
+export const PATCH = PUT;   
