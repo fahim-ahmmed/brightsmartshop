@@ -1,39 +1,60 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient } from "mongodb";
 
-const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
 const options = {};
 
-let client;
-let clientPromise;
+function getCleanUri() {
+  const raw = process.env.MONGODB_URI || process.env.NEXT_PUBLIC_MONGODB_URI || "";
+  // ভুলবশত কোটেশন (" ") বা স্পেস থাকলে তা অটোমেটিক পরিষ্কার করবে
+  return raw
+    .trim()
+    .replace(/^MONGODB_URI\s*=\s*/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
 
-if (process.env.NODE_ENV === 'development') {
-  // ক্যাশ চেক করার সময় client এবং clientPromise উভয়কেই সংরক্ষণ করতে হবে
-  if (!global._mongoClient) {
-    client = new MongoClient(uri, options);
-    global._mongoClient = client;
-    global._mongoClientPromise = client.connect();
-  } else {
-    client = global._mongoClient;
+let _clientPromise = null;
+
+function getClientPromise() {
+  if (_clientPromise) return _clientPromise;
+
+  const uri = getCleanUri();
+
+  if (!uri || (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://"))) {
+    throw new Error(
+      "MONGODB_URI is missing or invalid in Vercel Environment Variables."
+    );
   }
-  clientPromise = global._mongoClientPromise;
-} else {
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+
+  if (process.env.NODE_ENV === "development") {
+    if (!global._mongoClientPromise) {
+      const client = new MongoClient(uri, options);
+      global._mongoClientPromise = client.connect();
+    }
+    _clientPromise = global._mongoClientPromise;
+  } else {
+    const client = new MongoClient(uri, options);
+    _clientPromise = client.connect();
+  }
+
+  return _clientPromise;
 }
 
-// এখন client সঠিকভাবে পাওয়া যাবে, তাই আর undefined এরর আসবে না
-export const db = client.db();
-export const getUserCollection = () => db.collection('user');
-
-let indexPromise;
-export function ensureUserIndexes() {
-  indexPromise ||= getUserCollection()
-    .createIndex({ mobile: 1 }, { unique: true, partialFilterExpression: { mobile: { $type: 'string' } } })
-    .catch((e) => {
-      indexPromise = null;
-      console.error('[auth] index error:', e.message);
-    });
-  return indexPromise;
-}
+// 🟢 Lazy Connection: Vercel Build-এর সময় কখনোই ক্র্যাশ করবে না, শুধু লাইভ রিকোয়েস্টে কানেক্ট হবে
+const clientPromise = {
+  then(onFulfilled, onRejected) {
+    try {
+      return getClientPromise().then(onFulfilled, onRejected);
+    } catch (err) {
+      return Promise.reject(err).then(onFulfilled, onRejected);
+    }
+  },
+  catch(onRejected) {
+    try {
+      return getClientPromise().catch(onRejected);
+    } catch (err) {
+      return Promise.reject(err).catch(onRejected);
+    }
+  },
+};
 
 export default clientPromise;

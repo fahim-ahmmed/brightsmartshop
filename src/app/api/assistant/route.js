@@ -41,3 +41,5 @@ export async function POST(request) {
   }
   return NextResponse.json({ reply: 'Here is what I found.', products: docs.map(pick) });
 }
+
+export const dynamic = "force-dynamic";
