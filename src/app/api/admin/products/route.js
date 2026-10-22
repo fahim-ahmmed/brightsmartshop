@@ -1,114 +1,167 @@
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongo-client";
+import mongoose from "mongoose";
+import Product from "@/models/Product";
 
-// 🟢 ১. অ্যাডমিন ড্যাশবোর্ডের জন্য সমস্ত প্রোডাক্ট ফেচ করার GET মেথড
-export async function GET() {
-  try {
-    const client = await clientPromise;
-    const db = client.db();
-    
-    // সাইটের প্রোডাক্টগুলো যে কালেকশনে সেভ হয় (সাধারণত "products")
-    const products = await db.collection("products").find({}).sort({ createdAt: -1 }).toArray();
+globalThis.__PRODUCTS_SERVER_CACHE__ = globalThis.__PRODUCTS_SERVER_CACHE__ || null;
+globalThis.__PRODUCTS_CACHE_TIME__ = globalThis.__PRODUCTS_CACHE_TIME__ || 0;
 
-    return NextResponse.json({ success: true, products }, { status: 200 });
-  } catch (error) {
-    console.error("Fetch products API error:", error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+async function connectDB() {
+  if (mongoose.connection.readyState !== 1) {
+    await mongoose.connect(process.env.MONGODB_URI);
   }
 }
 
-// 🟢 ২. নতুন প্রোডাক্ট তৈরির POST মেথড
-export async function POST(req) {
+// ১. সব প্রোডাক্ট লোড করা (GET)
+export async function GET() {
   try {
-    const body = await req.json();
-    const { title, category, price, costPrice, discountPrice, unit, image, sku, stock, description } = body;
+    const now = Date.now();
+    if (
+      globalThis.__PRODUCTS_SERVER_CACHE__ &&
+      now - globalThis.__PRODUCTS_CACHE_TIME__ < 300000
+    ) {
+      return NextResponse.json({
+        success: true,
+        count: globalThis.__PRODUCTS_SERVER_CACHE__.length,
+        products: globalThis.__PRODUCTS_SERVER_CACHE__,
+        cached: true,
+      });
+    }
 
-    const sellPrice = Number(price) || 0;
-    const buyPrice = Number(costPrice) || 0;
-    const displayDiscountPrice = Number(discountPrice) || 0;
-    const productStock = Number(stock) || 10;
+    await connectDB();
+    const products = await Product.find({}).sort({ createdAt: -1 }).lean();
 
-    const profit = Math.max(0, sellPrice - buyPrice);
-    const autoPoints = Number((profit / 2.25).toFixed(2));
+    globalThis.__PRODUCTS_SERVER_CACHE__ = products;
+    globalThis.__PRODUCTS_CACHE_TIME__ = now;
 
-    const generateSlug = (text) => {
-      if (!text) return `product-${Date.now()}`;
-      return (
-        text
-          .toString()
-          .toLowerCase()
-          .trim()
-          .replace(/\s+/g, "-")
-          .replace(/[^\w\-]+/g, "")
-          .replace(/\-\-+/g, "-")
-          + "-" + Date.now()
-      );
-    };
-
-    const generateSku = () => {
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      return `BSS-${Date.now()}-${randomNum}`;
-    };
-
-    const client = await clientPromise;
-    const db = client.db();
-
-    const newProduct = {
-      title,
-      slug: generateSlug(title),
-      sku: sku && sku.trim() !== "" ? sku : generateSku(),
-      category: category || "General",
-      price: sellPrice,
-      costPrice: buyPrice,
-      originalPrice: buyPrice,
-      discountPrice: displayDiscountPrice,
-      points: autoPoints,
-      unit: unit || "1 Pcs",
-      stock: productStock,
-      description: description || "",
-      image: image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80",
-      createdAt: new Date(),
-    };
-
-    const result = await db.collection("products").insertOne(newProduct);
-
-    const savedProduct = {
-      ...newProduct,
-      _id: result.insertedId,
-    };
-
-    return NextResponse.json(
-      { success: true, message: "Product created successfully", product: savedProduct },
-      { status: 201 }
-    );
+    return NextResponse.json({
+      success: true,
+      count: products.length,
+      products,
+    });
   } catch (error) {
-    console.error("Create product API error:", error);
+    console.error("Fetch products error:", error);
     return NextResponse.json(
-      { success: false, message: error.message || "Failed to create product" },
+      { success: false, message: error.message },
       { status: 500 }
     );
   }
 }
 
-// 🟢 ৩. প্রোডাক্ট ডিলিট করার DELETE মেথড
-export async function DELETE(request) {
+// ২. নতুন প্রোডাক্ট সেভ করা (POST)
+export async function POST(req) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-    
-    if (!id) {
-      return NextResponse.json({ success: false, message: "Product ID required" }, { status: 400 });
+    await connectDB();
+    const body = await req.json();
+
+    if (!body.title || !body.price || !body.category) {
+      return NextResponse.json(
+        { success: false, message: "Title, Price and Category are required" },
+        { status: 400 }
+      );
     }
 
-    const { ObjectId } = require("mongodb");
-    const client = await clientPromise;
-    const db = client.db();
+    let slug = body.slug;
+    if (!slug) {
+      const baseSlug = body.title
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+    }
 
-    await db.collection("products").deleteOne({ _id: new ObjectId(id) });
+    const cost = Number(body.costPrice || body.buyingPrice || 0);
 
-    return NextResponse.json({ success: true, message: "Deleted successfully" }, { status: 200 });
+    const newProduct = await Product.create({
+      title: body.title,
+      slug: slug,
+      category: body.category,
+      categoryName: body.categoryName || body.category,
+      subCategory: body.subCategory || "",
+      subCategoryName: body.subCategoryName || body.subCategory || "",
+      price: Number(body.price),
+      buyingPrice: cost,
+      costPrice: cost,
+      originalPrice: Number(body.originalPrice || body.price),
+      discountPrice: Number(body.discountPrice || 0),
+      points: Math.floor(Number(body.points || 0)),
+      unit: body.unit || "1 Pcs",
+      stock: Number(body.stock || 100),
+      image: body.image || "📦",
+      description: body.description || "",
+      isPopular: Boolean(body.isPopular), // 🟢 পপুলার স্ট্যাটাস সেভ
+      isActive: body.isActive !== undefined ? body.isActive : true,
+      isPermanent: body.isPermanent !== undefined ? body.isPermanent : true,
+    });
+
+    globalThis.__PRODUCTS_SERVER_CACHE__ = null;
+
+    return NextResponse.json({ success: true, product: newProduct });
   } catch (error) {
-    console.error("Delete product API error:", error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error("Create product error:", error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// 🟢 ৩. প্রোডাক্টের Popular স্ট্যাটাস অন/অফ করার API (PATCH)
+export async function PATCH(req) {
+  try {
+    await connectDB();
+    const body = await req.json();
+    const { id, isPopular } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Product ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const updated = await Product.findByIdAndUpdate(
+      id,
+      { $set: { isPopular: Boolean(isPopular) } },
+      { new: true }
+    );
+
+    globalThis.__PRODUCTS_SERVER_CACHE__ = null;
+
+    return NextResponse.json({ success: true, product: updated });
+  } catch (error) {
+    console.error("Update popular status error:", error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// ৪. প্রোডাক্ট ডিলিট করা (DELETE)
+export async function DELETE(req) {
+  try {
+    await connectDB();
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Product ID is required" },
+        { status: 400 }
+      );
+    }
+
+    await Product.findByIdAndDelete(id);
+    globalThis.__PRODUCTS_SERVER_CACHE__ = null;
+
+    return NextResponse.json({ success: true, message: "Product deleted successfully" });
+  } catch (error) {
+    console.error("Delete product error:", error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }

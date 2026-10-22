@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client"; 
+import { ObjectId } from "mongodb";
 
 // ২৪ লেভেলের ক্রাইটেরিয়া, প্যাকেজ এবং লেভেল আপ ক্যাশব্যাক চার্ট
 const LEVEL_CONFIG = [
@@ -31,7 +32,7 @@ const LEVEL_CONFIG = [
 
 async function processOrderToGlobalChain(orderData) {
   const { userId, userName, points } = orderData;
-  const packagesGenerated = Math.floor(points / 40); // ৪০ পয়েন্ট = ১ প্যাকেজ
+  const packagesGenerated = Math.floor(points / 40);
 
   if (packagesGenerated <= 0) return;
 
@@ -134,7 +135,6 @@ export async function POST(req) {
     let prefix = "BSS"; 
     let isManId = false;
 
-    // 🟢 সঠিক প্রিফিক্স ও অর্ডার আইডি লজিক
     if (orderType === "M" || (isFirstOrder && points >= 40)) {
       prefix = "M";
       isManId = true;
@@ -142,7 +142,7 @@ export async function POST(req) {
       prefix = "P";
       isManId = false;
     } else {
-      prefix = "BSS"; // ৪০ পয়েন্টের নিচে হলে সাধারণ BSS অর্ডার হবে
+      prefix = "BSS"; 
       isManId = false;
     }
 
@@ -218,14 +218,54 @@ export async function PATCH(req) {
     if (status) updateDoc.status = status;
     if (paymentStatus) updateDoc.paymentStatus = paymentStatus;
 
+    const targetId = orderId || orderNo;
+
     const result = await db.collection("orders").updateOne(
-      { $or: [{ orderId: orderId }, { orderNo: orderNo || orderId }] },
+      { 
+        $or: [
+          { orderId: targetId }, 
+          { orderNo: targetId },
+          ...(ObjectId.isValid(targetId) ? [{ _id: new ObjectId(targetId) }] : [])
+        ] 
+      },
       { $set: updateDoc }
     );
 
     return NextResponse.json({ success: true, updated: result.modifiedCount });
   } catch (error) {
     console.error("Order update error:", error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+// 🟢 ডিলিট রিকোয়েস্ট হ্যান্ডেল করার জন্য সঠিক DELETE মেথড
+export async function DELETE(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const orderId = searchParams.get("orderId");
+
+    if (!orderId) {
+      return NextResponse.json({ success: false, message: "Order ID is required" }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db();
+
+    const result = await db.collection("orders").deleteOne({
+      $or: [
+        { orderId: orderId },
+        { orderNo: orderId },
+        ...(ObjectId.isValid(orderId) ? [{ _id: new ObjectId(orderId) }] : [])
+      ]
+    });
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, message: "Order deleted successfully" });
+  } catch (error) {
+    console.error("Order delete error:", error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }

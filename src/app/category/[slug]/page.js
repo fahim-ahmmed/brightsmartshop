@@ -1,155 +1,395 @@
+"use client";
+
+import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { dbConnect } from "@/lib/db";
-import Product from "@/models/Product";
-import Category from "@/models/Category";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCart } from "@/context/CartContext";
 
-export async function generateMetadata({ params }) {
-  try {
-    const resolvedParams = await params;
-    const slug = resolvedParams?.slug || "";
-    const formattedTitle = slug.replace(/-/g, " ");
-    return {
-      title: `${formattedTitle.charAt(0).toUpperCase() + formattedTitle.slice(1)} | Bright Smart Shop`,
-      description: `Explore top quality products under ${formattedTitle} category at Bright Smart Shop.`,
-    };
-  } catch (err) {
-    return {
-      title: "Category | Bright Smart Shop",
-    };
-  }
-}
+const MAIN_CATEGORY_TITLES = {
+  grocery: "Grocery",
+  fashion: "Fashion",
+  cosmetics: "Cosmetics",
+  "beauty-care": "Beauty Care",
+  "health-medicine": "Health & Medicine",
+  electronics: "Electronics",
+  "home-kitchen": "Home & Kitchen",
+};
 
-export default async function CategoryPage({ params }) {
-  const resolvedParams = await params;
-  const slug = resolvedParams?.slug || "";
+const norm = (str) =>
+  str ? String(str).trim().toLowerCase().replace(/[\s_-]+/g, "") : "";
 
-  let products = [];
-  let categoryName = slug.replace(/-/g, " ");
+export default function CategoryPage({ params }) {
+  const resolvedParams = use(params);
+  const slug = decodeURIComponent(resolvedParams?.slug || "").trim().toLowerCase();
 
-  try {
-    await dbConnect();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const subQuery = searchParams.get("sub") || "";
 
-    // 1. Fetch category details safely
-    const category = await Category.findOne({ slug }).lean();
-    if (category?.name) {
-      categoryName = category.name;
+  const cartContext = useCart();
+  const addToCart = cartContext?.addToCart || (() => {});
+
+  // ব্রাউজার মেমোরি বা সেশন স্টোরেজ থেকে সাথে সাথে ক্যাশ ডাটা তুলে নেওয়া (কোনো ওয়েটিং টাইম নেই)
+  const getCachedData = () => {
+    if (typeof window === "undefined") return { categories: [], products: [] };
+    let categories = window.__BSS_CACHE__?.categories || [];
+    let products = window.__BSS_CACHE__?.products || [];
+
+    if (categories.length === 0) {
+      try {
+        const sCat = sessionStorage.getItem("bss_categories");
+        if (sCat) categories = JSON.parse(sCat);
+      } catch (e) {}
     }
+    if (products.length === 0) {
+      try {
+        const sProd = sessionStorage.getItem("bss_products");
+        if (sProd) products = JSON.parse(sProd);
+      } catch (e) {}
+    }
+    return { categories, products };
+  };
 
-    // 2. Build Query (Matching by slug or category ID)
-    const query = {
-      $or: [
-        { category: slug },
-        ...(category ? [{ category: category._id }] : [])
-      ]
-    };
+  const initial = getCachedData();
+  const [rawCategories, setRawCategories] = useState(initial.categories);
+  const [rawProducts, setRawProducts] = useState(initial.products);
+  const [selectedSub, setSelectedSub] = useState(subQuery);
 
-    const rawProducts = await Product.find(query).sort({ createdAt: -1 }).lean();
-    products = JSON.parse(JSON.stringify(rawProducts));
-  } catch (error) {
-    console.error("Error fetching category products:", error);
-  }
+  useEffect(() => {
+    setSelectedSub(subQuery);
+  }, [subQuery]);
+
+  // ব্যাকগ্রাউন্ডে সাইলেন্ট সিংক (ইউজারকে লোডিং দেখাবে না)
+  useEffect(() => {
+    async function backgroundSync() {
+      try {
+        const [catRes, prodRes] = await Promise.all([
+          fetch("/api/categories"),
+          fetch("/api/admin/products"),
+        ]);
+        if (catRes.ok) {
+          const cData = await catRes.json();
+          const cList = cData.categories || cData || [];
+          setRawCategories(cList);
+          if (typeof window !== "undefined") {
+            window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+            window.__BSS_CACHE__.categories = cList;
+            try { sessionStorage.setItem("bss_categories", JSON.stringify(cList)); } catch (e) {}
+          }
+        }
+        if (prodRes.ok) {
+          const pData = await prodRes.json();
+          const pList = pData.products || pData || [];
+          setRawProducts(pList);
+          if (typeof window !== "undefined") {
+            window.__BSS_CACHE__ = window.__BSS_CACHE__ || {};
+            window.__BSS_CACHE__.products = pList;
+            try { sessionStorage.setItem("bss_products", JSON.stringify(pList)); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }
+    if (rawCategories.length === 0 || rawProducts.length === 0) {
+      backgroundSync();
+    }
+  }, []);
+
+  const currentCat = rawCategories.find(
+    (c) => norm(c.slug) === norm(slug) || norm(c.name) === norm(slug)
+  );
+
+  const categoryName =
+    currentCat?.name || MAIN_CATEGORY_TITLES[slug] || slug.replace(/-/g, " ");
+
+  const parentIds = [
+    norm(slug),
+    norm(MAIN_CATEGORY_TITLES[slug]),
+    norm(currentCat?.name),
+    norm(currentCat?.slug),
+    norm(currentCat?._id),
+  ].filter(Boolean);
+
+  const subCategories = rawCategories.filter((c) => {
+    const pCat = norm(c.parentCategory || c.parentSlug);
+    return pCat && parentIds.includes(pCat);
+  });
+
+  const subCatIds = subCategories
+    .flatMap((s) => [norm(s._id), norm(s.name), norm(s.slug)])
+    .filter(Boolean);
+
+  const validCategorySet = new Set([...parentIds, ...subCatIds]);
+
+  const allCategoryProducts = rawProducts.filter((p) => {
+    const pKeys = [
+      p.category,
+      p.categoryName,
+      p.subCategory,
+      p.subCategoryName,
+    ]
+      .map(norm)
+      .filter(Boolean);
+
+    return pKeys.some((k) => validCategorySet.has(k));
+  });
+
+  const selectedSubObj = subCategories.find(
+    (s) =>
+      norm(s.slug) === norm(selectedSub) ||
+      norm(s.name) === norm(selectedSub) ||
+      norm(s._id) === norm(selectedSub)
+  );
+
+  const targetSubTerms = [
+    norm(selectedSub),
+    norm(selectedSubObj?.slug),
+    norm(selectedSubObj?.name),
+    norm(selectedSubObj?._id),
+  ].filter(Boolean);
+
+  const displayedProducts = selectedSub
+    ? allCategoryProducts.filter((p) => {
+        const pSubKeys = [
+          p.subCategory,
+          p.subCategoryName,
+          p.subcategory,
+          p.sub_category,
+        ]
+          .map(norm)
+          .filter(Boolean);
+
+        const matchesSubField = pSubKeys.some((k) => targetSubTerms.includes(k));
+        const matchesTitle = targetSubTerms.some(
+          (term) => term.length > 2 && norm(p.title || p.name).includes(term)
+        );
+
+        return matchesSubField || matchesTitle;
+      })
+    : allCategoryProducts;
+
+  const handleSubClick = (subSlug) => {
+    setSelectedSub(subSlug);
+    const newUrl = subSlug
+      ? `/category/${encodeURIComponent(slug)}?sub=${encodeURIComponent(subSlug)}`
+      : `/category/${encodeURIComponent(slug)}`;
+    window.history.replaceState(null, "", newUrl);
+  };
+
+  const handleAddToCartOnly = (product) => {
+    addToCart({
+      id: product._id || product.id,
+      title: product.title || product.name,
+      price: product.price,
+      points: Math.floor(Number(product.points || product.point || 0)),
+      unit: product.unit || product.weight || "1 Pcs",
+      image: product.image,
+    });
+  };
+
+  const handleBuyNow = (product) => {
+    const params = new URLSearchParams({
+      id: product._id || product.id || "",
+      title: product.title || product.name || "",
+      price: product.price || 0,
+      point: Math.floor(Number(product.points || product.point || 0)),
+    });
+    router.push(`/checkout?${params.toString()}`);
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50/50 text-gray-800 font-sans pb-16">
+    <main className="min-h-screen bg-[#0F172A] text-gray-100 font-sans pb-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-8">
         
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-          <Link href="/" className="hover:text-emerald-600 transition-colors">
-            Home
-          </Link>
-          <span>/</span>
-          <Link href="/categories" className="hover:text-emerald-600 transition-colors">
-            Categories
-          </Link>
-          <span>/</span>
-          <span className="text-gray-900 font-medium capitalize">
+        <nav className="flex items-center gap-2 text-xs sm:text-sm text-gray-400">
+          <Link href="/" className="hover:text-emerald-400 transition-colors">Home</Link>
+          <span>›</span>
+          <button
+            onClick={() => handleSubClick("")}
+            className="hover:text-emerald-400 transition-colors capitalize cursor-pointer"
+          >
             {categoryName}
-          </span>
+          </button>
+          {selectedSub && (
+            <>
+              <span>›</span>
+              <span className="text-white font-medium capitalize">
+                {selectedSubObj?.name || selectedSub.replace(/-/g, " ")}
+              </span>
+            </>
+          )}
         </nav>
 
-        {/* Category Header */}
-        <div className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50 px-3 py-1 rounded-md border border-emerald-100">
-              Category
-            </span>
-            <h1 className="text-2xl sm:text-4xl font-extrabold text-gray-900 tracking-tight capitalize mt-2">
-              {categoryName}
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Showing {products.length} {products.length === 1 ? "product" : "products"} available in this category
-            </p>
-          </div>
+        {/* সাব-ক্যাটাগরি কার্ড */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-white tracking-wide">Categories</h2>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <button
+              type="button"
+              onClick={() => handleSubClick("")}
+              className={`rounded-2xl overflow-hidden flex flex-col transition-all cursor-pointer border text-left ${
+                !selectedSub 
+                  ? "border-emerald-500 ring-2 ring-emerald-500/40 bg-slate-800" 
+                  : "border-slate-800 bg-[#1E293B]/60 hover:border-slate-600"
+              }`}
+            >
+              <div className="h-[120px] w-full bg-emerald-500/10 flex items-center justify-center">
+                <span className="text-3xl">📦</span>
+              </div>
+              <div className="bg-[#1E293B] p-3 text-center flex-1 flex flex-col justify-center w-full">
+                <h4 className="font-bold text-sm text-white line-clamp-1">All {categoryName}</h4>
+                <span className="text-xs text-emerald-400 font-bold mt-1">Explore All</span>
+              </div>
+            </button>
 
-          <Link
-            href="/shop"
-            className="px-5 py-2.5 bg-gray-100 hover:bg-emerald-600 hover:text-white text-gray-700 font-semibold text-sm rounded-xl transition-all w-fit"
-          >
-            Explore All Products
-          </Link>
-        </div>
-
-        {/* Product Grid */}
-        {products.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <Link
-                key={product._id}
-                href={`/product/${product.slug}`}
-                className="group bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="relative w-full h-48 bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center p-2">
+            {subCategories.map((sub) => {
+              const subIdentifier = sub.slug || sub.name;
+              const isCurrent =
+                norm(selectedSub) === norm(subIdentifier) ||
+                norm(selectedSub) === norm(sub.name) ||
+                norm(selectedSub) === norm(sub._id);
+              
+              return (
+                <button
+                  key={sub._id}
+                  type="button"
+                  onClick={() => handleSubClick(subIdentifier)}
+                  className={`rounded-2xl overflow-hidden flex flex-col transition-all cursor-pointer border text-left ${
+                    isCurrent 
+                      ? "border-emerald-500 ring-2 ring-emerald-500/40 bg-slate-800" 
+                      : "border-slate-800 bg-[#1E293B]/60 hover:border-slate-600"
+                  }`}
+                >
+                  <div className="h-[120px] w-full bg-white flex items-center justify-center p-3 relative">
                     <img
-                      src={product.image || "/hero1.jpg"}
-                      alt={product.name}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                      src={sub.image || "/hero1.jpg"}
+                      alt={sub.name}
+                      className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                     />
-                  </div>
-                  <h3 className="font-semibold text-gray-800 text-sm group-hover:text-emerald-600 transition-colors line-clamp-2">
-                    {product.name}
-                  </h3>
-                </div>
-
-                <div className="pt-3 border-t border-gray-50 mt-3 flex items-center justify-between">
-                  <div>
-                    <span className="text-base font-bold text-emerald-700">
-                      ৳{product.price}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="text-xs text-gray-400 line-through ml-2">
-                        ৳{product.originalPrice}
+                    {isCurrent && (
+                      <span className="absolute top-2 right-2 bg-emerald-500 text-slate-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase shadow-md">
+                        SELECTED
                       </span>
                     )}
                   </div>
-                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                    View
-                  </span>
+                  <div className="bg-[#1E293B] p-3 text-center flex-1 flex flex-col justify-center border-t border-slate-700/50 w-full">
+                    <h4 className="font-bold text-sm text-white line-clamp-2 leading-snug">{sub.name}</h4>
+                    <span className="text-xs text-gray-400 mt-1">Explore</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Product Header */}
+        <div className="pt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white capitalize">
+              {selectedSubObj?.name || (selectedSub ? selectedSub.replace(/-/g, " ") : categoryName)}
+            </h1>
+            <p className="text-sm text-gray-400 mt-1">
+              Showing <span className="font-bold text-white">{displayedProducts.length}</span> products
+            </p>
+          </div>
+        </div>
+
+        {/* প্রোডাক্ট গ্রিড (কোনো লোডিং স্ক্রিন বা অপেক্ষা নেই) */}
+        {displayedProducts.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+            {displayedProducts.map((p) => {
+              const prodId = p._id || p.id;
+              const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
+              const sellPrice = Number(p.price || 0);
+              const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
+
+              return (
+                <div
+                  key={prodId}
+                  className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+                >
+                  {saveAmount > 0 && (
+                    <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                      SAVE ৳{saveAmount}
+                    </span>
+                  )}
+
+                  <Link
+                    href={`/shop/${prodId}`}
+                    className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
+                  >
+                    <img
+                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                      alt={p.title || p.name}
+                      className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </Link>
+
+                  <div className="space-y-1 mb-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
+                        {p.subCategoryName || p.subCategory || p.categoryName || categoryName}
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                        📦 {p.unit || p.weight || "1 Pcs"}
+                      </span>
+                    </div>
+
+                    <Link href={`/shop/${prodId}`}>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
+                        {p.title || p.name}
+                      </h3>
+                    </Link>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
+                      {saveAmount > 0 && (
+                        <span className="text-[11px] text-gray-400 line-through font-bold">
+                          ৳{oldPrice}
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-xs font-bold text-gray-700">
+                      +{Math.floor(Number(p.points || p.point || 0))} Points
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAddToCartOnly(p)}
+                      className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                    >
+                      🛒 Cart
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleBuyNow(p)}
+                      className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
+                    >
+                      ⚡ Buy Now
+                    </button>
+                  </div>
                 </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-gray-100 p-12 text-center space-y-4">
-            <div className="text-4xl">📦</div>
-            <h3 className="text-lg font-bold text-gray-800">No products found in this category</h3>
-            <p className="text-sm text-gray-500 max-w-md mx-auto">
-              We haven't added any products to this category yet. Check back soon or browse other available categories.
+          <div className="bg-[#1E293B] rounded-3xl border border-slate-800 p-12 text-center space-y-4 shadow-sm">
+            <div className="text-5xl">📦</div>
+            <h3 className="text-lg font-bold text-white">No products found in this section</h3>
+            <p className="text-sm text-gray-400 max-w-md mx-auto">
+              We haven't added any products here yet. Please check other categories or browse the shop.
             </p>
-            <div className="pt-2">
-              <Link
-                href="/shop"
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all inline-block"
-              >
-                Browse Shop
-              </Link>
-            </div>
           </div>
         )}
 
       </div>
-
     </main>
   );
 }

@@ -32,7 +32,7 @@ export default function AdminLayout({ children }) {
         const role = u.role || "Admin";
         setUserRole(role);
 
-        // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড (/219192026) এবং প্রোডাক্ট পেজ (/219192026/products) এ যাওয়ার অনুমতি থাকবে
+        // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড (/219192026) এবং প্রোডাক্ট পেজ (/219192026/products) এ যাওয়ার অনুমতি থাকবে
         const isSubAdmin = role.toLowerCase() === "sub-admin" || role.toLowerCase() === "subadmin";
         
         if (isSubAdmin) {
@@ -40,7 +40,7 @@ export default function AdminLayout({ children }) {
           const isAllowed = allowedPaths.some(path => pathname === path || pathname.startsWith(path + "/"));
           
           if (!isAllowed) {
-            toast.error("সাব-এডমিনের শুধুমাত্র ড্যাশবোর্ড এবং প্রোডাক্ট আপলোড করার অ্যাক্সেস রয়েছে!");
+            toast.error("সাব-এডমিনের শুধুমাত্র ড্যাশবোর্ড এবং প্রোডাক্ট আপলোড করার অ্যাক্সেস রয়েছে!");
             router.push("/219192026");
             return;
           }
@@ -77,6 +77,7 @@ export default function AdminLayout({ children }) {
     { label: "Products & Upload", href: "/219192026/products", icon: "📦" },
     { label: "Wishlist Requests", href: "/219192026/wishlist", icon: "❤️" },
     { label: "Orders", href: "/219192026/orders", icon: "📋" },
+    { label: "Unordered Customers", href: "/219192026/unordered-customers", icon: "⚠️" }, // 🟢 নতুন যুক্ত করা মেনু
     { label: "Categories", href: "/219192026/categories", icon: "🏷️" },
     { label: "Withdrawals", href: "/219192026/withdrawals", icon: "💳" },
     { label: "Hero Banners", href: "/219192026/banners", icon: "🖼️" },

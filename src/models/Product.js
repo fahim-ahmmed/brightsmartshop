@@ -10,7 +10,7 @@ const ProductSchema = new mongoose.Schema(
     slug: {
       type: String,
       required: true,
-      unique: true,
+      trim: true,
       lowercase: true,
     },
     price: {
@@ -20,11 +20,19 @@ const ProductSchema = new mongoose.Schema(
     },
     buyingPrice: {
       type: Number,
-      required: [true, "Buying price is required"],
+      default: 0,
+      min: 0,
+    },
+    costPrice: {
+      type: Number,
       default: 0,
       min: 0,
     },
     originalPrice: {
+      type: Number,
+      default: 0,
+    },
+    discountPrice: {
       type: Number,
       default: 0,
     },
@@ -34,17 +42,25 @@ const ProductSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: [
-        "Grocery",
-        "Fashion",
-        "Cosmetics",
-        "Beauty Care",
-        "Health & Medicine",
-        "Electronics",
-        "Home & Kitchen",
-        "Offers",
-      ],
       required: [true, "Category is required"],
+      trim: true,
+    },
+    categoryName: {
+      type: String,
+      default: "",
+    },
+    subCategory: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    subCategoryName: {
+      type: String,
+      default: "",
+    },
+    unit: {
+      type: String,
+      default: "1 Pcs",
     },
     description: {
       type: String,
@@ -57,6 +73,11 @@ const ProductSchema = new mongoose.Schema(
     stock: {
       type: Number,
       default: 100,
+    },
+    // 🟢 হোমপেজের Popular Products সেকশনে দেখানোর ফিল্ড
+    isPopular: {
+      type: Boolean,
+      default: false,
     },
     isActive: {
       type: Boolean,

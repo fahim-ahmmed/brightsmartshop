@@ -51,6 +51,7 @@ export default function SiteFooter() {
                 </Link>
               </li>
               <li>
+                {/* ধরা যাক আপনার About Us পেজটি /about রুটে আছে */}
                 <Link href="/about" className="hover:text-emerald-300 transition-colors">
                   About Us
                 </Link>
@@ -61,6 +62,7 @@ export default function SiteFooter() {
                 </Link>
               </li>
               <li>
+                {/* ধরা যাক আপনার Contact Us পেজটি /contact রুটে আছে */}
                 <Link href="/contact" className="hover:text-emerald-300 transition-colors">
                   Contact Us
                 </Link>
@@ -85,11 +87,13 @@ export default function SiteFooter() {
                 </Link>
               </li>
               <li>
+                {/* 🟢 Shipping & Delivery Policy পেজের সঠিক লিংক */}
                 <Link href="/shipping-policy" className="hover:text-emerald-300 transition-colors">
                   Shipping Policy
                 </Link>
               </li>
               <li>
+                {/* 🟢 Return & Refund Policy পেজের সঠিক লিংক */}
                 <Link href="/return-policy" className="hover:text-emerald-300 transition-colors">
                   Return & Refund
                 </Link>
@@ -104,16 +108,19 @@ export default function SiteFooter() {
             </h3>
             <ul className="space-y-1.5 font-medium">
               <li>
+                {/* 🟢 Privacy Policy পেজের সঠিক লিংক */}
                 <Link href="/privacy-policy" className="hover:text-emerald-300 transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
+                {/* 🟢 Terms & Conditions পেজের সঠিক লিংক */}
                 <Link href="/terms" className="hover:text-emerald-300 transition-colors">
                   Terms & Conditions
                 </Link>
               </li>
               <li>
+                {/* 🟢 Payment Policy পেজের সঠিক লিংক (যদি আলাদা পেজ থাকে অথবা পলিসি সেকশন হয়) */}
                 <Link href="/payment-policy" className="hover:text-emerald-300 transition-colors">
                   Payment Policy
                 </Link>
@@ -128,7 +135,7 @@ export default function SiteFooter() {
             </h3>
             <div className="space-y-1.5 font-medium">
               <p>
-                <span className="text-emerald-400 font-bold">Website:</span> brightsmartshop24.com
+                <span className="text-emerald-400 font-bold">Website:</span> brightsmartshop24.com[cite: 3]
               </p>
               <p>
                 <span className="text-emerald-400 font-bold">Email:</span> brightsmartshop24@gmail.com
@@ -136,7 +143,6 @@ export default function SiteFooter() {
               <p>
                 <span className="text-emerald-400 font-bold">Phone:</span> 01727629513
               </p>
-              
               <p>
                 <span className="text-emerald-400 font-bold">WhatsApp:</span> 01727629513
               </p>
@@ -212,10 +218,8 @@ export default function SiteFooter() {
 
           {/* Developed By Text (Centered) */}
           <p className="text-[11px] font-medium text-emerald-200/80 text-center">
-           Developed by <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500 tracking-wide drop-shadow-sm">Fahim Ahmmed</span>
+            Developed by <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500 tracking-wide drop-shadow-sm">Fahim Ahmmed</span>
           </p>
-
-         
 
         </div>
 

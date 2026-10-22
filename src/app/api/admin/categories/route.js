@@ -20,7 +20,7 @@ export async function GET() {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { name, parentCategory, slug, icon } = body;
+    const { name, parentCategory, slug, image, icon } = body;
 
     if (!name) {
       return NextResponse.json({ success: false, message: "Category name is required" }, { status: 400 });
@@ -30,10 +30,10 @@ export async function POST(req) {
     const db = client.db();
     const collection = db.collection("categories");
 
-    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
+    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
     const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 
-    // চেক করা এই নামে অলরেডি কোনো ক্যাটাগরি আছে কি না
+    // চেক করা এই স্লাগ দিয়ে অলরেডি কোনো ক্যাটাগরি আছে কি না
     const existing = await collection.findOne({ slug: categorySlug });
     if (existing) {
       return NextResponse.json({ success: false, message: "This category already exists!" }, { status: 400 });
@@ -42,7 +42,8 @@ export async function POST(req) {
     const newCategory = {
       name: name.trim(),
       slug: categorySlug,
-      parentCategory: parentCategory || "Main", // "Main" হলে মেইন ক্যাটাগরি, না হলে প্যারেন্টের নাম সাব-ক্যাটাগরি হিসেবে থাকবে
+      parentCategory: parentCategory || null, // মূল ক্যাটাগরি হলে null, সাব হলে প্যারেন্টের ID থাকবে
+      image: image || "/hero1.jpg",           // ছবি সেভ করার ফিল্ড যুক্ত করা হয়েছে
       icon: icon || "📁",
       createdAt: new Date(),
     };

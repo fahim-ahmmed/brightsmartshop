@@ -15,6 +15,8 @@ export default function AdminDashboardPage() {
     wishlistCount: 0,
     totalProducts: 0,
     pendingWithdrawals: 0,
+    manIdOrdersCount: 0,     // 🟢 ম্যান আইডি অর্ডার সংখ্যা
+    productIdOrdersCount: 0, // 🟢 প্রোডাক্ট আইডি অর্ডার সংখ্যা
   });
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +58,8 @@ export default function AdminDashboardPage() {
   const cards = [
     { label: "Total Customers", value: stats.totalCustomers, sub: "Registered users", icon: "👥" },
     { label: "Total Orders", value: stats.totalOrders, sub: "All time orders", icon: "📋" },
+    { label: "Man ID Orders", value: stats.manIdOrdersCount || 0, sub: "M-Prefix orders count", icon: "👤" },     // 🟢 নতুন কার্ড
+    { label: "Product ID Orders", value: stats.productIdOrdersCount || 0, sub: "P-Prefix orders count", icon: "📦" }, // 🟢 নতুন কার্ড
     { label: "Pending Orders", value: stats.pendingOrders || 0, sub: "Awaiting fulfillment", icon: "⏳" },
     { label: "Total Revenue", value: `৳${Number(stats.totalRevenue || 0).toFixed(2)}`, sub: "Paid / Completed sales", icon: "💰" },
     { label: "Wishlist Demands", value: stats.wishlistCount, sub: "Real customer requests", icon: "❤️" },
