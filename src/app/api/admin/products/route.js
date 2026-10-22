@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import Product from "@/models/Product";
 
-// 🟢 সার্ভার র‍্যামে স্থায়ী ক্যাশ (কখনোই মুছে যাবে না, সরাসরি মেমোরিতে আপডেট হবে)
+export const dynamic = "force-dynamic"; // 🟢 Vercel Build Error Fix (ক্যাশ ও বিল্ড-টাইম রেন্ডারিং বন্ধ করবে)
+
+// 🟢 সার্ভার র‍্যামে স্থায়ী ক্যাশ (কখনোই মুছে যাবে না, সরাসরি মেমোরিতে আপডেট হবে)
 globalThis.__PRODUCTS_SERVER_CACHE__ = globalThis.__PRODUCTS_SERVER_CACHE__ || null;
 
 async function connectDB() {
@@ -14,7 +16,7 @@ async function connectDB() {
 // ১. সুপার-ফাস্ট প্রোডাক্ট লোড API (0ms Server Memory Response)
 export async function GET() {
   try {
-    // র‍্যামে ডাটা থাকলে ডাটাবেসে না গিয়ে ০ মিলিসেকেন্ডে সাথে সাথে পাঠাবে
+    // র‍্যামে ডাটা থাকলে ডাটাবেসে না গিয়ে ০ মিলিসেকেন্ডে সাথে সাথে পাঠাবে
     if (globalThis.__PRODUCTS_SERVER_CACHE__) {
       return NextResponse.json(
         {
@@ -99,7 +101,7 @@ export async function POST(req) {
 
     const plainProduct = newProduct.toObject();
 
-    // ক্যাশ মুছে না ফেলে সরাসরি র‍্যামের লিস্টে নতুন প্রোডাক্ট ঢুকিয়ে দেওয়া
+    // ক্যাশ মুছে না ফেলে সরাসরি র‍্যামের লিস্টে নতুন প্রোডাক্ট ঢুকিয়ে দেওয়া
     if (globalThis.__PRODUCTS_SERVER_CACHE__) {
       globalThis.__PRODUCTS_SERVER_CACHE__ = [
         plainProduct,
