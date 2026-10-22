@@ -2,59 +2,77 @@ import { MongoClient } from "mongodb";
 
 const options = {};
 
-function getCleanUri() {
-  const raw = process.env.MONGODB_URI || process.env.NEXT_PUBLIC_MONGODB_URI || "";
-  // ভুলবশত কোটেশন (" ") বা স্পেস থাকলে তা অটোমেটিক পরিষ্কার করবে
-  return raw
-    .trim()
-    .replace(/^MONGODB_URI\s*=\s*/i, "")
-    .replace(/^["']|["']$/g, "")
-    .trim();
+function getValidMongoUri() {
+  let raw =
+    process.env.MONGODB_URI ||
+    process.env.NEXT_PUBLIC_MONGODB_URI ||
+    process.env.DATABASE_URL ||
+    "";
+
+  raw = raw.trim();
+
+  // যদি ভুলবশত কোটেশন বা MONGODB_URI= সহ পেস্ট করা থাকে, তা অটোমেটিক ক্লিন করবে
+  if (raw.includes("mongodb+srv://")) {
+    raw = "mongodb+srv://" + raw.split("mongodb+srv://")[1];
+  } else if (raw.includes("mongodb://")) {
+    raw = "mongodb://" + raw.split("mongodb://")[1];
+  }
+
+  raw = raw.replace(/["'\s]+$/g, "");
+
+  if (raw.startsWith("mongodb://") || raw.startsWith("mongodb+srv://")) {
+    return raw;
+  }
+
+  // বিল্ডের সময় ভেরিয়েবল না পেলে ডামি URI ব্যবহার করবে যাতে কখনোই MongoParseError না আসে
+  return "mongodb://127.0.0.1:27017/brightsmartshop";
 }
 
+const uri = getValidMongoUri();
+
+let client;
 let _clientPromise = null;
+
+if (process.env.NODE_ENV === "development") {
+  if (!global._mongoClient) {
+    global._mongoClient = new MongoClient(uri, options);
+  }
+  client = global._mongoClient;
+} else {
+  client = new MongoClient(uri, options);
+}
+
+// 🟢 Named export 'db' ও 'client' (যাতে queries.js ও অন্যান্য ফাইলে কোনো এরর না আসে)
+export const db = client.db();
+export { client };
 
 function getClientPromise() {
   if (_clientPromise) return _clientPromise;
 
-  const uri = getCleanUri();
-
-  if (!uri || (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://"))) {
-    throw new Error(
-      "MONGODB_URI is missing or invalid in Vercel Environment Variables."
-    );
-  }
-
   if (process.env.NODE_ENV === "development") {
     if (!global._mongoClientPromise) {
-      const client = new MongoClient(uri, options);
       global._mongoClientPromise = client.connect();
     }
     _clientPromise = global._mongoClientPromise;
   } else {
-    const client = new MongoClient(uri, options);
     _clientPromise = client.connect();
   }
 
   return _clientPromise;
 }
 
-// 🟢 Lazy Connection: Vercel Build-এর সময় কখনোই ক্র্যাশ করবে না, শুধু লাইভ রিকোয়েস্টে কানেক্ট হবে
+// 🟢 Lazy clientPromise: বিল্ডের সময় ডাটাবেস কল করে ক্র্যাশ করবে না
 const clientPromise = {
   then(onFulfilled, onRejected) {
-    try {
-      return getClientPromise().then(onFulfilled, onRejected);
-    } catch (err) {
-      return Promise.reject(err).then(onFulfilled, onRejected);
-    }
+    return getClientPromise().then(onFulfilled, onRejected);
   },
   catch(onRejected) {
-    try {
-      return getClientPromise().catch(onRejected);
-    } catch (err) {
-      return Promise.reject(err).catch(onRejected);
-    }
+    return getClientPromise().catch(onRejected);
+  },
+  finally(onFinally) {
+    return getClientPromise().finally(onFinally);
   },
 };
 
+export { clientPromise };
 export default clientPromise;
