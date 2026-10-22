@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
 import { ObjectId } from "mongodb";
 
+export const dynamic = "force-dynamic"; // 🟢 Vercel Build Error Fix (ক্যাশ ও বিল্ড-টাইম রেন্ডারিং বন্ধ করবে)
+
 // ১. সকল ব্যানার রিড করা (GET)
 export async function GET() {
   try {
