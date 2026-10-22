@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
 import { ObjectId } from "mongodb";
 
+export const dynamic = "force-dynamic"; // 🟢 Vercel Build Error Fix (ক্যাশ ও বিল্ড-টাইম রেন্ডারিং বন্ধ করবে)
+
 // সমস্ত ক্যাটাগরি ও সাব-ক্যাটাগরি ফেচ করার GET মেথড
 export async function GET() {
   try {
@@ -30,10 +32,10 @@ export async function POST(req) {
     const db = client.db();
     const collection = db.collection("categories");
 
-    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
+    // ইউনিক স্লাগ তৈরি (যদি না দেওয়া থাকে)
     const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 
-    // চেক করা এই স্লাগ দিয়ে অলরেডি কোনো ক্যাটাগরি আছে কি না
+    // চেক করা এই স্লাগ দিয়ে অলরেডি কোনো ক্যাটাগরি আছে কি না
     const existing = await collection.findOne({ slug: categorySlug });
     if (existing) {
       return NextResponse.json({ success: false, message: "This category already exists!" }, { status: 400 });
@@ -43,7 +45,7 @@ export async function POST(req) {
       name: name.trim(),
       slug: categorySlug,
       parentCategory: parentCategory || null, // মূল ক্যাটাগরি হলে null, সাব হলে প্যারেন্টের ID থাকবে
-      image: image || "/hero1.jpg",           // ছবি সেভ করার ফিল্ড যুক্ত করা হয়েছে
+      image: image || "/hero1.jpg",           // ছবি সেভ করার ফিল্ড যুক্ত করা হয়েছে
       icon: icon || "📁",
       createdAt: new Date(),
     };
