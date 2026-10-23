@@ -11,7 +11,7 @@ function getValidMongoUri() {
 
   raw = raw.trim();
 
-  // যদি ভুলবশত কোটেশন বা MONGODB_URI= সহ পেস্ট করা থাকে, তা অটোমেটিক ক্লিন করবে
+  // ভুলবশত কোটেশন বা MONGODB_URI= সহ পেস্ট করা থাকলে ক্লিন করবে
   if (raw.includes("mongodb+srv://")) {
     raw = "mongodb+srv://" + raw.split("mongodb+srv://")[1];
   } else if (raw.includes("mongodb://")) {
@@ -24,7 +24,7 @@ function getValidMongoUri() {
     return raw;
   }
 
-  // বিল্ডের সময় ভেরিয়েবল না পেলে ডামি URI ব্যবহার করবে যাতে কখনোই MongoParseError না আসে
+  // বিল্ডের সময় ভেরিয়েবল না পেলে ডামি URI, যাতে MongoParseError না আসে
   return "mongodb://127.0.0.1:27017/brightsmartshop";
 }
 
@@ -42,8 +42,8 @@ if (process.env.NODE_ENV === "development") {
   client = new MongoClient(uri, options);
 }
 
-// 🟢 Named export 'db' ও 'client' (যাতে queries.js ও অন্যান্য ফাইলে কোনো এরর না আসে)
-export const db = client.db();
+// URI-তে ডাটাবেসের নাম থাকলে সেটাই নেবে। না থাকলে MONGODB_DB ভ্যারিয়েবল দিন
+export const db = client.db(process.env.MONGODB_DB || undefined);
 export { client };
 
 function getClientPromise() {
@@ -61,7 +61,7 @@ function getClientPromise() {
   return _clientPromise;
 }
 
-// 🟢 Lazy clientPromise: বিল্ডের সময় ডাটাবেস কল করে ক্র্যাশ করবে না
+// Lazy clientPromise: বিল্ডের সময় ডাটাবেস কল করবে না
 const clientPromise = {
   then(onFulfilled, onRejected) {
     return getClientPromise().then(onFulfilled, onRejected);
@@ -73,6 +73,32 @@ const clientPromise = {
     return getClientPromise().finally(onFinally);
   },
 };
+
+// async নয়: auth/actions.js আর profile/actions.js এটা সরাসরি .findOne() দিয়ে ব্যবহার করে
+export function getUserCollection() {
+  return db.collection("user"); // আসল কালেকশনের নাম দিন ("user" বা "users")
+}
+
+let _indexesPromise = null;
+
+// registerAction এটা await করে ডাকে
+export async function ensureUserIndexes() {
+  if (!_indexesPromise) {
+    _indexesPromise = getUserCollection()
+      .createIndex(
+        { mobile: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { mobile: { $type: "string" } },
+        }
+      )
+      .catch((err) => {
+        _indexesPromise = null; // ফেইল করলে পরের বার আবার চেষ্টা করবে
+        throw err;
+      });
+  }
+  return _indexesPromise;
+}
 
 export { clientPromise };
 export default clientPromise;
