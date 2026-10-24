@@ -22,3 +22,5 @@ export default async function ResetPasswordPage({ searchParams }) {
     </AuthCard>
   );
 }
+
+export const dynamic = 'force-dynamic';

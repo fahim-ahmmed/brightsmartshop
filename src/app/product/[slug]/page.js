@@ -182,3 +182,4 @@ export default async function ProductDetailPage({ params }) {
     </main>
   );
 }
+export const dynamic = 'force-dynamic';

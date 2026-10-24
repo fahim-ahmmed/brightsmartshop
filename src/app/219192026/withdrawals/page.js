@@ -39,3 +39,5 @@ export default async function AdminWithdrawalsPage({ searchParams }) {
     </main>
   );
 }
+
+export const dynamic = 'force-dynamic';

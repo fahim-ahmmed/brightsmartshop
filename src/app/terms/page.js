@@ -55,3 +55,4 @@ export default function TermsPage() {
     </main>
   );
 }
+export const dynamic = 'force-dynamic';

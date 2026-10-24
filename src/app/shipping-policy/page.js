@@ -52,3 +52,4 @@ export default function ShippingPolicyPage() {
     </main>
   );
 }
+export const dynamic = 'force-dynamic';

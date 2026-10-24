@@ -55,3 +55,4 @@ export default function ReturnPolicyPage() {
     </main>
   );
 }
+export const dynamic = 'force-dynamic';

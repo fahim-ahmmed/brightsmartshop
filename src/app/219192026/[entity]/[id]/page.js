@@ -34,3 +34,5 @@ export default async function EntityEditPage({ params }) {
     </main>
   );
 }
+
+export const dynamic = 'force-dynamic';

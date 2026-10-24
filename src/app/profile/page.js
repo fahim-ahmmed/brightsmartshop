@@ -19,3 +19,5 @@ export default async function ProfilePage() {
     </main>
   );
 }
+
+export const dynamic = 'force-dynamic';

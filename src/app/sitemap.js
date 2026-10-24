@@ -21,3 +21,5 @@ export default async function sitemap() {
     return pages; // ডেটাবেস না পেলেও সাইটম্যাপ ভাঙবে না
   }
 }
+
+export const dynamic = 'force-dynamic';

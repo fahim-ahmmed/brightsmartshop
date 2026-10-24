@@ -87,3 +87,4 @@ export default async function AdminOrderPage({ params }) {
     </main>
   );
 }
+export const dynamic = 'force-dynamic';

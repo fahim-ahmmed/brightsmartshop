@@ -50,3 +50,5 @@ export default async function OrderPage({ params }) {
     </main>
   );
 }
+
+export const dynamic = 'force-dynamic';

@@ -10,3 +10,5 @@ export default function ForgotPasswordPage() {
     </AuthCard>
   );
 }
+
+export const dynamic = 'force-dynamic';

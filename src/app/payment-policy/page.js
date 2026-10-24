@@ -37,3 +37,4 @@ export default function PaymentPolicyPage() {
     </main>
   );
 }
+export const dynamic = 'force-dynamic';

@@ -51,3 +51,5 @@ export default async function EntityListPage({ params, searchParams }) {
     </main>
   );
 }
+
+export const dynamic = 'force-dynamic';
