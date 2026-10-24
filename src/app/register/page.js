@@ -57,12 +57,18 @@ export default function RegisterPage() {
         
         <div className="text-center space-y-2 relative z-10">
           <Link href="/" className="inline-flex items-center gap-2 group">
-            <div className="w-12 h-12 rounded-2xl bg-[#00875A] text-white font-black flex items-center justify-center text-base shadow-lg shadow-emerald-700/20 group-hover:scale-105 transition-transform">
-              bss
-            </div>
-            <span className="font-serif font-black text-2xl text-[#00875A] tracking-tight">
+           
+        <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+            <img
+              src="/logo.jpg"
+              alt="Bright Smart Shop Logo"
+              className="h-10 sm:h-12 w-auto object-contain rounded-xl group-hover:scale-105 transition-transform"
+            />
+            <span className="font-serif font-black text-lg sm:text-2xl text-[#00875A] tracking-tight">
               Bright Smart Shop
             </span>
+          </Link>
+            
           </Link>
           <h1 className="text-xl sm:text-2xl font-black text-gray-900 pt-2 tracking-tight">
             নতুন অ্যাকাউন্ট তৈরি করুন

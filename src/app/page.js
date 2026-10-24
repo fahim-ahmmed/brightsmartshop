@@ -93,7 +93,6 @@ export default function HomePage() {
       router.prefetch(`/category/${cat.slug}`);
     });
 
-    // ১. প্রথমেই IndexedDB থেকে ৫ মিলিসেকেন্ডে প্রোডাক্ট তুলে আনা (যদি বড় ছবির কারণে localStorage-এ না থাকে)
     async function loadInstantFromBrowserDB() {
       if (!initialProds || initialProds.length === 0) {
         const idbProds = await getFromIDB("products");
@@ -122,18 +121,10 @@ export default function HomePage() {
         return found ? { ...defCat, ...found, slug: defCat.slug } : defCat;
       });
 
-      const extraCats = dbMainCats.filter(
-        (dbCat) =>
-          !DEFAULT_MAIN_CATEGORIES.some(
-            (defCat) =>
-              defCat.slug === dbCat.slug?.toLowerCase() ||
-              defCat.name.toLowerCase() === dbCat.name?.toLowerCase()
-          )
-      );
-      setMainCategories([...merged, ...extraCats]);
+      // 🟢 শুধু নির্ধারিত ৭টি মূল ক্যাটাগরিই থাকবে, উল্টাপাল্টা অতিরিক্ত ক্যাটাগরি বাদ দেওয়া হয়েছে
+      setMainCategories(merged);
     }
 
-    // ২. ব্যাকগ্রাউন্ডে সার্ভারের সাথে সাইলেন্ট সিংক
     async function syncWithServer() {
       try {
         const [prodRes, catRes, bannerRes] = await Promise.all([
@@ -228,7 +219,6 @@ export default function HomePage() {
     "bg-[#EEF2FF] border-[#E0E7FF]",
   ];
 
-  // যদি অ্যাডমিন থেকে কোনো প্রোডাক্ট Popular সিলেক্ট করা থাকে তবে সেগুলো দেখাবে, না থাকলে সব প্রোডাক্টই সাথে সাথে দেখাবে
   const popularFiltered = products.filter((p) => Boolean(p.isPopular));
   const popularProducts = popularFiltered.length > 0 ? popularFiltered : products;
 
@@ -270,9 +260,9 @@ export default function HomePage() {
         </div>
       </nav>
 
-      <main className="w-full space-y-12 py-8">
-        <section className="max-w-[1400px] mx-auto px-4 sm:px-8">
-          <div className="relative w-full h-[240px] sm:h-[380px] md:h-[460px] lg:h-[520px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-white">
+      <main className="w-full space-y-10 sm:space-y-12 py-6 sm:py-8">
+        <section className="max-w-[1400px] mx-auto px-3 sm:px-8">
+          <div className="relative w-full h-[200px] sm:h-[380px] md:h-[460px] lg:h-[520px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-gray-100 bg-white">
             {displayBanners.map((banner, index) => (
               <div
                 key={banner._id || index}
@@ -292,21 +282,21 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-6">
-          <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-4">
-            <h2 className="text-2xl sm:text-3xl font-black text-[#00875A] tracking-tight">
+        <section className="max-w-[1400px] mx-auto px-3 sm:px-8 space-y-5">
+          <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-3 sm:pl-4">
+            <h2 className="text-xl sm:text-3xl font-black text-[#00875A] tracking-tight">
               Shop by Category
             </h2>
             <Link
               href="/categories"
-              className="text-sm sm:text-base font-black text-[#00875A] hover:text-[#00704A] hover:underline flex items-center gap-1.5"
+              className="text-xs sm:text-base font-black text-[#00875A] hover:text-[#00704A] hover:underline flex items-center gap-1"
             >
-              <span>View All Categories</span>
-              <span className="text-lg">›</span>
+              <span>View All</span>
+              <span className="text-base">›</span>
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4 sm:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-5">
             {mainCategories.map((cat, idx) => {
               const colorClass = catColors[idx % catColors.length];
               const catSlug = cat.slug || cat._id;
@@ -316,16 +306,16 @@ export default function HomePage() {
                   key={cat._id || cat.slug || idx}
                   href={`/category/${catSlug}`}
                   prefetch={true}
-                  className={`${colorClass} border-2 rounded-3xl p-3.5 flex flex-col items-center justify-between transition-all duration-300 hover:-translate-y-2 hover:shadow-xl cursor-pointer group min-h-[195px] w-full`}
+                  className={`${colorClass} border-2 rounded-2xl sm:rounded-3xl p-3 flex flex-col items-center justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg cursor-pointer group min-h-[160px] sm:min-h-[195px] w-full`}
                 >
-                  <div className="w-full h-28 sm:h-32 rounded-2xl overflow-hidden my-1 flex items-center justify-center bg-white shadow-2xs p-1.5">
+                  <div className="w-full h-24 sm:h-32 rounded-xl sm:rounded-2xl overflow-hidden my-1 flex items-center justify-center bg-white shadow-2xs p-1.5">
                     <img
                       src={cat.image || "/hero1.jpg"}
                       alt={cat.name}
-                      className="w-full h-full object-contain rounded-xl group-hover:scale-110 transition-transform duration-500"
+                      className="w-full h-full object-contain rounded-lg group-hover:scale-110 transition-transform duration-500"
                     />
                   </div>
-                  <div className="w-full flex items-center justify-between pt-2.5 border-t border-black/10 mt-2">
+                  <div className="w-full flex items-center justify-between pt-2 border-t border-black/10 mt-1.5">
                     <span className="text-xs font-black text-gray-900 truncate">
                       {cat.name}
                     </span>
@@ -339,84 +329,101 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* POPULAR PRODUCTS (কোনো লোডিং স্পিনার ছাড়া তাৎক্ষণিক প্রদর্শন) */}
-        <section className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-6">
-          <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-4">
-            <h2 className="text-2xl sm:text-3xl font-black text-[#00875A] tracking-tight">
+        {/* POPULAR PRODUCTS (মোবাইল ও ডেস্কটপের জন্য পারফেক্ট কম্প্যাক্ট কার্ড) */}
+        <section className="max-w-[1400px] mx-auto px-3 sm:px-8 space-y-5">
+          <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-3 sm:pl-4">
+            <h2 className="text-xl sm:text-3xl font-black text-[#00875A] tracking-tight">
               Popular Products
             </h2>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-5">
             {popularProducts.map((p) => {
               const prodId = p._id || p.id;
               const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
               const sellPrice = Number(p.price || 0);
               const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
+              const pointsVal = Math.floor(Number(p.points || p.point || 0));
 
               return (
                 <div
                   key={prodId}
-                  className="bg-white rounded-3xl p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+                  className="bg-white rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 border border-gray-200/80 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
                 >
                   {saveAmount > 0 && (
-                    <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                    <span className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-rose-500 text-white text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs z-10 uppercase tracking-wider whitespace-nowrap">
                       SAVE ৳{saveAmount}
                     </span>
                   )}
-                  <Link
-                    href={`/shop/${prodId}`}
-                    className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
-                  >
-                    <img
-                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
-                      alt={p.title}
-                      loading="eager"
-                      decoding="async"
-                      className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </Link>
-                  <div className="space-y-1 mb-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                        {p.subCategoryName || p.subCategory || p.categoryName || p.category || "General"}
-                      </span>
-                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                        📦 {p.unit || p.weight || "1 Pcs"}
-                      </span>
-                    </div>
-                    <Link href={`/shop/${prodId}`}>
-                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
-                        {p.title}
-                      </h3>
+
+                  <div>
+                    <Link
+                      href={`/shop/${prodId}`}
+                      className="w-full h-32 sm:h-48 bg-gray-50 rounded-xl sm:rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-2 sm:mb-3 relative group-hover:bg-gray-100/85 transition-colors block"
+                    >
+                      <img
+                        src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                        alt={p.title}
+                        loading="eager"
+                        decoding="async"
+                        className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
+                      />
                     </Link>
-                  </div>
-                  <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
-                      {saveAmount > 0 && (
-                        <span className="text-[11px] text-gray-400 line-through font-bold">
-                          ৳{oldPrice}
+
+                    <div className="space-y-1 mb-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[9px] sm:text-[10px] font-black text-[#00875A] uppercase tracking-wider truncate">
+                          {p.subCategoryName || p.subCategory || p.categoryName || p.category || "General"}
                         </span>
-                      )}
+                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md border border-gray-200 whitespace-nowrap shrink-0">
+                          📦 {p.unit || p.weight || "1 Pcs"}
+                        </span>
+                      </div>
+                      <Link href={`/shop/${prodId}`}>
+                        <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 truncate group-hover:text-[#00875A] hover:underline">
+                          {p.title}
+                        </h3>
+                      </Link>
                     </div>
-                    <span className="text-xs font-bold text-gray-700">
-                      +{Math.floor(Number(p.points || p.point || 0))} Points
-                    </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleAddToCartOnly(p)}
-                      className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                    >
-                      🛒 Cart
-                    </button>
-                    <button
-                      onClick={() => handleBuyNow(p)}
-                      className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
-                    >
-                      ⚡ Buy Now
-                    </button>
+
+                  <div>
+                    {/* দাম ও পয়েন্ট (এক লাইনে ফিক্সড) */}
+                    <div className="pt-2 border-t border-gray-100 mb-2 flex items-center justify-between gap-1">
+                      <div className="flex items-baseline gap-1 min-w-0">
+                        <span className="text-sm sm:text-base font-black text-gray-900 whitespace-nowrap">
+                          ৳{sellPrice}
+                        </span>
+                        {saveAmount > 0 && (
+                          <span className="text-[10px] sm:text-[11px] text-gray-400 line-through font-bold whitespace-nowrap truncate">
+                            ৳{oldPrice}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] sm:text-[11px] font-extrabold text-[#00875A] bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-md whitespace-nowrap shrink-0">
+                        +{pointsVal} Pts
+                      </span>
+                    </div>
+
+                    {/* Cart ও Buy Now বাটন (সবসময় এক লাইনে থাকবে) */}
+                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddToCartOnly(p)}
+                        className="h-8 sm:h-10 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[10px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
+                      >
+                        <span>🛒</span>
+                        <span>Cart</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBuyNow(p)}
+                        className="h-8 sm:h-10 px-1.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[10px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center gap-1 whitespace-nowrap"
+                      >
+                        <span>⚡</span>
+                        <span>Buy Now</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

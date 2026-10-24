@@ -81,10 +81,10 @@ function ShopContent() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 space-y-8 font-sans text-gray-800">
+    <div className="max-w-[1400px] mx-auto px-3 sm:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 font-sans text-gray-800">
       
       {/* Title Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-200 pb-5">
         <div>
           <span className="text-xs font-black text-[#00875A] uppercase tracking-widest block">
             STORE CATALOG
@@ -99,14 +99,14 @@ function ShopContent() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
         {filterCategories.map((cat, idx) => {
           const isActive = rawCategory.toLowerCase() === cat.slug.toLowerCase();
           return (
             <Link
               key={idx}
               href={cat.slug === "all" ? "/shop" : `/shop?category=${cat.slug}`}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl sm:rounded-2xl text-xs font-black whitespace-nowrap transition-all ${
                 isActive
                   ? "bg-[#00875A] text-white shadow-md shadow-emerald-700/20"
                   : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
@@ -125,88 +125,97 @@ function ShopContent() {
           Fetching products...
         </div>
       ) : filteredProducts.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-5">
           {filteredProducts.map((p) => {
             const prodId = p._id || p.id;
             const oldPrice = Number(p.discountPrice || p.originalPrice || 0);
             const sellPrice = Number(p.price || 0);
             const saveAmount = oldPrice > sellPrice ? oldPrice - sellPrice : 0;
+            const pointsVal = Math.floor(Number(p.points || p.point || 0));
 
             return (
               <div
                 key={prodId}
-                className="bg-white rounded-3xl p-4 border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+                className="bg-white rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 border border-gray-200 shadow-2xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
               >
                 {/* 🔴 SAVE Badge */}
                 {saveAmount > 0 && (
-                  <span className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs z-10 uppercase tracking-wider">
+                  <span className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-rose-500 text-white text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs z-10 uppercase tracking-wider whitespace-nowrap">
                     SAVE ৳{saveAmount}
                   </span>
                 )}
 
-                {/* 🟢 Clickable Image linked to details page */}
-                <Link href={`/shop/${prodId}`} className="w-full h-44 sm:h-52 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-3 relative group-hover:bg-gray-100 transition-colors block">
-                  <img
-                    src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
-                    alt={p.title}
-                    className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-300"
-                  />
-                </Link>
-
-                {/* Title, Category & Unit */}
-                <div className="space-y-1 mb-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-[#00875A] uppercase tracking-wider block">
-                      {p.category || "General"}
-                    </span>
-                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                      📦 {p.unit || p.weight || "1 Pcs"}
-                    </span>
-                  </div>
-
-                  {/* 🟢 Clickable Title linked to details page */}
-                  <Link href={`/shop/${prodId}`}>
-                    <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 line-clamp-1 group-hover:text-[#00875A] hover:underline">
-                      {p.title}
-                    </h3>
+                <div>
+                  {/* 🟢 Clickable Image */}
+                  <Link
+                    href={`/shop/${prodId}`}
+                    className="w-full h-32 sm:h-48 bg-gray-50 rounded-xl sm:rounded-2xl overflow-hidden flex items-center justify-center p-2 mb-2 sm:mb-3 relative group-hover:bg-gray-100 transition-colors block"
+                  >
+                    <img
+                      src={p.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80"}
+                      alt={p.title}
+                      className="w-full h-full object-contain rounded-lg group-hover:scale-105 transition-transform duration-300"
+                    />
                   </Link>
+
+                  {/* Title, Category & Unit */}
+                  <div className="space-y-1 mb-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[9px] sm:text-[10px] font-black text-[#00875A] uppercase tracking-wider truncate">
+                        {p.category || "General"}
+                      </span>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md border border-gray-200 whitespace-nowrap shrink-0">
+                        📦 {p.unit || p.weight || "1 Pcs"}
+                      </span>
+                    </div>
+
+                    <Link href={`/shop/${prodId}`}>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-gray-900 truncate group-hover:text-[#00875A] hover:underline">
+                        {p.title}
+                      </h3>
+                    </Link>
+                  </div>
                 </div>
 
-                {/* Price (Left) & Points (Right) Row */}
-                <div className="pt-2 border-t border-gray-100 mb-2.5 flex items-center justify-between px-1">
-                  
-                  {/* সেলিং প্রাইস ও কাটা ডিসকাউন্ট প্রাইস */}
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-base font-black text-gray-900">৳{sellPrice}</span>
-                    {saveAmount > 0 && (
-                      <span className="text-[11px] text-gray-400 line-through font-bold">৳{oldPrice}</span>
-                    )}
+                <div>
+                  {/* Price (Left) & Points (Right) Row */}
+                  <div className="pt-2 border-t border-gray-100 mb-2 flex items-center justify-between gap-1">
+                    <div className="flex items-baseline gap-1 min-w-0">
+                      <span className="text-sm sm:text-base font-black text-gray-900 whitespace-nowrap">
+                        ৳{sellPrice}
+                      </span>
+                      {saveAmount > 0 && (
+                        <span className="text-[10px] sm:text-[11px] text-gray-400 line-through font-bold whitespace-nowrap truncate">
+                          ৳{oldPrice}
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-[9px] sm:text-[11px] font-extrabold text-[#00875A] bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-md whitespace-nowrap shrink-0">
+                      +{pointsVal} Pts
+                    </span>
                   </div>
 
-                  {/* পয়েন্ট */}
-                  <span className="text-xs font-bold text-gray-700">
-                    +{p.points || p.point || 0} Points
-                  </span>
+                  {/* Single-Line Cart & Buy Now Buttons */}
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAddToCartOnly(p)}
+                      className="h-8 sm:h-10 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[10px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
+                    >
+                      <span>🛒</span>
+                      <span>Cart</span>
+                    </button>
 
-                </div>
-
-                {/* Buy Now & Add to Cart Buttons */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAddToCartOnly(p)}
-                    className="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-[#00875A] font-extrabold text-[11px] rounded-xl transition-all cursor-pointer text-center"
-                  >
-                    🛒 Cart
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleBuyNow(p)}
-                    className="py-2.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[11px] rounded-xl transition-all cursor-pointer shadow-xs text-center"
-                  >
-                    ⚡ Buy Now
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBuyNow(p)}
+                      className="h-8 sm:h-10 px-1.5 bg-[#00875A] hover:bg-[#00704A] text-white font-black text-[10px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center gap-1 whitespace-nowrap"
+                    >
+                      <span>⚡</span>
+                      <span>Buy Now</span>
+                    </button>
+                  </div>
                 </div>
 
               </div>
