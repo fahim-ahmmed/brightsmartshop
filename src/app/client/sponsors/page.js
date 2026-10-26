@@ -1,30 +1,76 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { authClient } from "@/lib/auth-client";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 
 export default function MySponsorListPage() {
   const [loading, setLoading] = useState(true);
-  const [userInfo, setUserInfo] = useState({
-    name: "Md Fahim Ahammad Shihab",
-    sponsorId: "20260048", // User's own ID acts as Sponsor ID
-  });
+  const [displayUserId, setDisplayUserId] = useState("");
+  const [localUser, setLocalUser] = useState(null);
 
   // Sponsored Members List
   const [sponsorList, setSponsorList] = useState([]);
   const [copied, setCopied] = useState(false);
 
+  // Better Auth Live Session Hook
+  const { data: session } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null };
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem("bright_user");
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setLocalUser(parsed);
+        if (parsed?.referralCode) {
+          setDisplayUserId(parsed.referralCode);
+        }
+      } catch (e) {
+        console.error("User parse error", e);
+      }
+    }
+  }, []);
+
+  const currentUser = localUser || session?.user;
+
   useEffect(() => {
     async function fetchSponsorData() {
       try {
-        const res = await fetch("/api/client/dashboard-stats");
+        const uid = currentUser?.id || currentUser?._id || "";
+        const phone = currentUser?.mobile || currentUser?.phone || "";
+        const email = currentUser?.email || "";
+
+        if (!uid && !phone && !email) {
+          setLoading(false);
+          return;
+        }
+
+        const params = new URLSearchParams();
+        if (uid) params.set("userId", uid);
+        if (phone) params.set("phone", phone);
+        if (email) params.set("email", email);
+
+        const res = await fetch(`/api/client/dashboard-stats?${params.toString()}`, {
+          cache: "no-store",
+        });
+
         if (res.ok) {
           const json = await res.json();
-          if (json.user) {
-            setUserInfo({
-              name: json.user.name || "Md Fahim Ahammad Shihab",
-              sponsorId: json.user.id || "20260048",
-            });
+          if (json.user?.id) {
+            setDisplayUserId(json.user.id);
+            if (localUser) {
+              localUser.referralCode = json.user.id;
+              localStorage.setItem("bright_user", JSON.stringify(localUser));
+            }
+          }
+
+          // ব্যাকএন্ড থেকে আসা স্পন্সর লিস্ট সেট করা
+          if (json.sponsorList && Array.isArray(json.sponsorList)) {
+            setSponsorList(json.sponsorList);
+          } else if (json.stats?.sponsorsList && Array.isArray(json.stats.sponsorsList)) {
+            setSponsorList(json.stats.sponsorsList);
           }
         }
       } catch (err) {
@@ -34,11 +80,19 @@ export default function MySponsorListPage() {
       }
     }
     fetchSponsorData();
-  }, []);
+  }, [currentUser]);
+
+  // 🟢 ন্যাভবার ও ড্যাশবোর্ডের মতো একই পার্মানেন্ট আইডি নিশ্চিতকরণ
+  const sponsorId =
+    displayUserId ||
+    currentUser?.referralCode ||
+    localUser?.referralCode ||
+    localUser?.id ||
+    "20260048";
 
   // Referral Link Copy Handler
   const handleCopyLink = () => {
-    const referralUrl = `${window.location.origin}/register?sponsor=${userInfo.sponsorId}`;
+    const referralUrl = `${window.location.origin}/register?sponsor=${sponsorId}`;
     navigator.clipboard.writeText(referralUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
@@ -46,7 +100,7 @@ export default function MySponsorListPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-xs font-bold text-gray-600">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-xs font-bold text-gray-600 animate-pulse">
         Loading Sponsor Network...
       </div>
     );
@@ -54,7 +108,6 @@ export default function MySponsorListPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/60 font-sans flex flex-col lg:flex-row text-gray-800 w-full">
-      
       {/* 1. Responsive Sidebar */}
       <DashboardSidebar />
 
@@ -81,10 +134,11 @@ export default function MySponsorListPage() {
                 YOUR SPONSOR ID
               </span>
               <span className="text-lg font-black text-emerald-900 font-mono">
-                {userInfo.sponsorId}
+                {sponsorId}
               </span>
             </div>
             <button
+              type="button"
               onClick={handleCopyLink}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer"
             >
@@ -136,7 +190,7 @@ export default function MySponsorListPage() {
               <h3 className="text-lg font-bold text-gray-900">Direct Referred Members</h3>
             </div>
             <span className="text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-              Sponsor ID: <span className="font-mono text-gray-900">{userInfo.sponsorId}</span>
+              Sponsor ID: <span className="font-mono text-gray-900">{sponsorId}</span>
             </span>
           </div>
 
@@ -146,7 +200,7 @@ export default function MySponsorListPage() {
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase text-[10px]">
                     <th className="py-3 px-3">SL</th>
-                    <th className="py-3 px-3">MEMBER ID (THEIR SPONSOR ID)</th>
+                    <th className="py-3 px-3">MEMBER ID</th>
                     <th className="py-3 px-3">NAME</th>
                     <th className="py-3 px-3">JOIN DATE</th>
                     <th className="py-3 px-3">STATUS</th>
@@ -155,13 +209,15 @@ export default function MySponsorListPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {sponsorList.map((member, index) => (
-                    <tr key={member.id} className="hover:bg-gray-50/80 transition-colors">
+                    <tr key={member.id || index} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-3.5 px-3 font-bold text-gray-500">{index + 1}</td>
                       <td className="py-3.5 px-3 font-mono font-bold text-emerald-700">
-                        {member.id}
+                        {member.id || member.chainAccountId}
                       </td>
                       <td className="py-3.5 px-3 font-bold text-gray-900">{member.name}</td>
-                      <td className="py-3.5 px-3 text-gray-500">{member.joinDate}</td>
+                      <td className="py-3.5 px-3 text-gray-500">
+                        {member.joinDate ? new Date(member.joinDate).toLocaleDateString() : "Recent"}
+                      </td>
                       <td className="py-3.5 px-3">
                         <span
                           className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
@@ -182,15 +238,15 @@ export default function MySponsorListPage() {
               </table>
             </div>
           ) : (
-            /* Empty State when no members sponsored yet */
             <div className="py-12 text-center space-y-3">
               <div className="text-4xl">👥</div>
               <h4 className="font-bold text-gray-800 text-sm">No sponsored members yet.</h4>
               <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
-                Share your unique Sponsor ID (<span className="font-mono font-bold text-emerald-700">{userInfo.sponsorId}</span>) or referral link with others when they create an account.
+                Share your unique Sponsor ID (<span className="font-mono font-bold text-emerald-700">{sponsorId}</span>) or referral link with others when they create an account.
               </p>
               <div className="pt-2">
                 <button
+                  type="button"
                   onClick={handleCopyLink}
                   className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-2xs transition-all inline-block cursor-pointer"
                 >
@@ -199,11 +255,9 @@ export default function MySponsorListPage() {
               </div>
             </div>
           )}
-
         </div>
 
       </main>
-
     </div>
   );
 }

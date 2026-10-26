@@ -135,7 +135,7 @@ export default function SiteFooter() {
             </h3>
             <div className="space-y-1.5 font-medium">
               <p>
-                <span className="text-emerald-400 font-bold">Website:</span> brightsmartshop24.com[cite: 3]
+                <span className="text-emerald-400 font-bold">Website:</span> brightsmartshop24.com 
               </p>
               <p>
                 <span className="text-emerald-400 font-bold">Email:</span> brightsmartshop24@gmail.com

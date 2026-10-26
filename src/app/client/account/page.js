@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
+import { authClient } from "@/lib/auth-client";
 
 export default function MyAccountPage() {
   const [userData, setUserData] = useState({
@@ -19,6 +20,15 @@ export default function MyAccountPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+
+  // Password Change States
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState({ type: "", text: "" });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -90,7 +100,14 @@ export default function MyAccountPage() {
     });
   };
 
-  // 🟢 📷 প্রোফাইল ছবি পিক ও স্বয়ংক্রিয়ভাবে আল্ট্রা-ফাস্ট WebP কম্প্রেশন
+  const handlePasswordChangeInput = (e) => {
+    setPasswordData({
+      ...passwordData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  // 🟢 📷 প্রোফাইল ছবি পিক ও স্বয়ংক্রিয়ভাবে আল্ট্রা-ফাস্ট WebP কম্প্রেশন
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -117,7 +134,7 @@ export default function MyAccountPage() {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 75% কোয়ালিটিতে WebP কম্প্রেশন (৩ MB ছবি হয়ে যাবে মাত্র ১৫-২০ KB!)
+        // 75% কোয়ালিটিতে WebP কম্প্রেশন (৩ MB ছবি হয়ে যাবে মাত্র ১৫-২০ KB!)
         const compressedBase64 = canvas.toDataURL("image/webp", 0.75);
         setFormData((prev) => ({
           ...prev,
@@ -185,6 +202,55 @@ export default function MyAccountPage() {
       setIsEditing(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 🟢 পাসওয়ার্ড পরিবর্তনের হ্যান্ডলার (পুরাতন পাসওয়ার্ড যাচাইকরণ সহ)
+  const handlePasswordSave = async (e) => {
+    e.preventDefault();
+    setPasswordSaving(true);
+    setPasswordMessage({ type: "", text: "" });
+
+    const { currentPassword, newPassword, confirmPassword } = passwordData;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordMessage({ type: "error", text: "সবগুলো পাসওয়ার্ড ফিল্ড পূরণ করুন!" });
+      setPasswordSaving(false);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: "error", text: "নতুন পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড মিলছে না!" });
+      setPasswordSaving(false);
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordMessage({ type: "error", text: "নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে!" });
+      setPasswordSaving(false);
+      return;
+    }
+
+    try {
+      const { error } = await authClient.changePassword({
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        revokeOtherSessions: true,
+      });
+
+      if (error) {
+        throw new Error(error.message || "পুরাতন পাসওয়ার্ড সঠিক নয়!");
+      }
+
+      setPasswordMessage({ type: "success", text: "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!" });
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err) {
+      setPasswordMessage({ 
+        type: "error", 
+        text: err.message || "পুরাতন পাসওয়ার্ড সঠিক নয় অথবা পরিবর্তন করা সম্ভব হয়নি।" 
+      });
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -348,100 +414,178 @@ export default function MyAccountPage() {
             </div>
           ) : (
             /* ---------------- EDIT FORM VIEW ---------------- */
-            <form onSubmit={handleSave} className="space-y-5 animate-in fade-in duration-200">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Editable Full Name */}
+            <div className="space-y-8">
+              {/* Profile Update Form */}
+              <form onSubmit={handleSave} className="space-y-5 animate-in fade-in duration-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Editable Full Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      required
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                    />
+                  </div>
+
+                  {/* Disabled Email Address */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                      Email Address (Cannot be changed)
+                    </label>
+                    <input
+                      type="email"
+                      disabled
+                      value={userData.email}
+                      className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Editable Mobile */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                      Mobile Number <span className="text-gray-400 font-normal lowercase"></span>
+                    </label>
+                    <input
+                      type="tel"
+                      name="mobile"
+                      placeholder="Enter phone number"
+                      value={formData.mobile}
+                      onChange={handleChange}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                    />
+                  </div>
+
+                  {/* Disabled Sponsor Code */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                      Sponsor Code
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={userData.sponsorCode || "None"}
+                      className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                {/* Editable Address */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                    Full Name *
+                    Delivery Address *
                   </label>
-                  <input
-                    type="text"
-                    name="name"
+                  <textarea
+                    name="address"
                     required
-                    value={formData.name}
+                    rows={3}
+                    value={formData.address}
                     onChange={handleChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all resize-none"
                   />
                 </div>
 
-                {/* Disabled Email Address */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
-                    Email Address (Cannot be changed)
-                  </label>
-                  <input
-                    type="email"
-                    disabled
-                    value={userData.email}
-                    className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-500 cursor-not-allowed"
-                  />
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {saving ? "Saving Changes..." : "Save Profile Changes"}
+                  </button>
                 </div>
-              </div>
+              </form>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Editable Mobile */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                    Mobile Number <span className="text-gray-400 font-normal lowercase">(optional)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="mobile"
-                    placeholder="Enter phone number"
-                    value={formData.mobile}
-                    onChange={handleChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-                  />
-                </div>
+              {/* ---------------- PASSWORD CHANGE SECTION ---------------- */}
+              <div className="pt-6 border-t-2 border-dashed border-gray-200 space-y-4">
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                  Change Password Section
+                </h3>
 
-                {/* Disabled Sponsor Code */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
-                    Sponsor Code
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value={userData.sponsorCode || "None"}
-                    className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-500 cursor-not-allowed"
-                  />
-                </div>
-              </div>
+                {passwordMessage.text && (
+                  <div
+                    className={`p-3 rounded-xl text-xs font-bold ${
+                      passwordMessage.type === "success"
+                        ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                        : "bg-rose-50 border border-rose-200 text-rose-800"
+                    }`}
+                  >
+                    {passwordMessage.text}
+                  </div>
+                )}
 
-              {/* Editable Address */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                  Delivery Address *
-                </label>
-                <textarea
-                  name="address"
-                  required
-                  rows={3}
-                  value={formData.address}
-                  onChange={handleChange}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all resize-none"
-                />
-              </div>
+                <form onSubmit={handlePasswordSave} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1">
+                      পুরাতন পাসওয়ার্ড (Current Password) *
+                    </label>
+                    <input
+                      type="password"
+                      name="currentPassword"
+                      value={passwordData.currentPassword}
+                      onChange={handlePasswordChangeInput}
+                      placeholder="Enter current password"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                    />
+                  </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {saving ? "Saving Changes..." : "Save Profile Changes"}
-                </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1">
+                        নতুন পাসওয়ার্ড (New Password) *
+                      </label>
+                      <input
+                        type="password"
+                        name="newPassword"
+                        value={passwordData.newPassword}
+                        onChange={handlePasswordChangeInput}
+                        placeholder="At least 6 characters"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1">
+                        কনফার্ম পাসওয়ার্ড (Confirm Password) *
+                      </label>
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        value={passwordData.confirmPassword}
+                        onChange={handlePasswordChangeInput}
+                        placeholder="Confirm new password"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={passwordSaving}
+                      className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {passwordSaving ? "Updating Password..." : "Update Password"}
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
+            </div>
           )}
         </div>
       </main>

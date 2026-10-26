@@ -83,6 +83,8 @@ export default function AdminLayout({ children }) {
     { label: "Hero Banners", href: "/219192026/banners", icon: "🖼️" },
     { label: "Management Team", href: "/219192026/team", icon: "👥" },
     { label: "Users", href: "/219192026/users", icon: "👤" },
+    { label: "Total Purchases", href: "/219192026/purchases", icon: "🧾" },
+    { label: "Total Profits", href: "/219192026/profits", icon: "💹" },
   ];
 
   // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড এবং প্রোডাক্টস অপশন ফিল্টার করে দেখাবে

@@ -403,14 +403,14 @@ export default function WithdrawPaymentPage() {
             {/* Amount Field */}
             <div className="space-y-1.5 pt-2 border-t border-gray-100">
               <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                Withdrawal Amount (৳) * <span className="text-[10px] text-emerald-600 font-normal">(সর্বনিম্ন ১০০ টাকা)</span>
+                Withdrawal Amount (৳) * <span className="text-[10px] text-emerald-600 font-normal">(সর্বনিম্ন ৫০০ টাকা)</span>
               </label>
               <input
                 type="number"
                 required
-                min="100"
+                min="500"
                 max={walletBalance}
-                placeholder={`Min: ৳100, Max: ৳${walletBalance.toFixed(2)}`}
+                placeholder={`Min: ৳500, Max: ৳${walletBalance.toFixed(2)}`}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-extrabold text-emerald-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
@@ -421,7 +421,7 @@ export default function WithdrawPaymentPage() {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={submitting || walletBalance < 100}
+                disabled={submitting || walletBalance < 500}
                 className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {submitting ? (

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
+import { requireAdmin, syncMissingProfiles } from "@/lib/current-user";
 
-export async function GET() {
+export async function GET(req) {
   try {
+    if (!(await requireAdmin(req, { allowSub: true }))) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+    await syncMissingProfiles();
     const client = await clientPromise;
     const db = client.db();
-
     // ১. রিয়েল-টাইম কাস্টমার কাউন্ট (users বা user কালেকশন থেকে)
     let totalCustomers = await db.collection("users").countDocuments({});
     if (!totalCustomers || totalCustomers === 0) {

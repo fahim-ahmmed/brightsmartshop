@@ -17,6 +17,7 @@ export default function SiteHeader() {
   // Fallback LocalStorage State
   const [localUser, setLocalUser] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [displayUserId, setDisplayUserId] = useState("");
   const dropdownRef = useRef(null);
 
   // Sync with LocalStorage if available
@@ -25,7 +26,11 @@ export default function SiteHeader() {
       const savedUser = localStorage.getItem("bright_user");
       if (savedUser) {
         try {
-          setLocalUser(JSON.parse(savedUser));
+          const parsed = JSON.parse(savedUser);
+          setLocalUser(parsed);
+          if (parsed?.referralCode) {
+            setDisplayUserId(parsed.referralCode);
+          }
         } catch (e) {
           console.error("User parse error", e);
         }
@@ -43,6 +48,50 @@ export default function SiteHeader() {
     };
   }, []);
 
+  const currentUser = localUser || session?.user;
+
+  useEffect(() => {
+    async function loadUserId() {
+      try {
+        const uid = currentUser?.id || currentUser?._id || "";
+        const phone = currentUser?.mobile || currentUser?.phone || "";
+
+        if (!uid && !phone) return;
+
+        const params = new URLSearchParams();
+        if (uid) params.set("userId", uid);
+        if (phone) params.set("phone", phone);
+
+        const res = await fetch(`/api/client/dashboard-stats?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user?.id) {
+            setDisplayUserId(data.user.id);
+            if (localUser) {
+              localUser.referralCode = data.user.id;
+              localStorage.setItem("bright_user", JSON.stringify(localUser));
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch user ID:", e);
+      }
+    }
+
+    if (currentUser) {
+      loadUserId();
+    }
+  }, [currentUser]);
+
+  // 🟢 এখানে finalUserId ডিফাইন করা হলো যাতে ReferenceError না আসে
+  const finalUserId =
+    displayUserId ||
+    currentUser?.referralCode ||
+    localUser?.referralCode ||
+    "20260048";
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -53,9 +102,6 @@ export default function SiteHeader() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  // Priority: LocalStorage User (if edited) -> Better Auth Session User
-  const currentUser = localUser || session?.user;
 
   const {
     cartItems = [],
@@ -89,11 +135,9 @@ export default function SiteHeader() {
     window.location.href = "/";
   };
 
-  // Human Default Avatar
   const defaultHumanAvatar =
     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
 
-  // 🎯 মোট রিওয়ার্ড পয়েন্ট হিসেব
   const totalPoints = cartItems.reduce((acc, item) => {
     const pts = Number(item.points || item.point || item.rewardPoints || 0);
     return acc + pts * (item.quantity || 1);
@@ -102,15 +146,15 @@ export default function SiteHeader() {
   return (
     <>
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-2xs font-sans h-16 sm:h-20">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-3 sm:gap-6">
+        <div className="max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-2 sm:gap-6">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+          <Link href="/" className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0 group">
             <img
               src="/logo.jpg"
               alt="Bright Smart Shop Logo"
-              className="h-10 sm:h-12 w-auto object-contain rounded-xl group-hover:scale-105 transition-transform"
+              className="h-8 sm:h-12 w-auto object-contain rounded-xl group-hover:scale-105 transition-transform"
             />
-            <span className="font-serif font-black text-lg sm:text-2xl text-[#00875A] tracking-tight">
+            <span className="font-serif font-black text-sm sm:text-2xl text-[#00875A] tracking-tight truncate max-w-[110px] sm:max-w-none">
               Bright Smart Shop
             </span>
           </Link>
@@ -141,15 +185,15 @@ export default function SiteHeader() {
           </form>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
             {/* Wishlist */}
             <Link
               href="/wishlist"
-              className="relative flex items-center gap-2 px-3 py-2 rounded-2xl bg-rose-50/70 hover:bg-rose-100/80 text-rose-600 border border-rose-100 transition-all group cursor-pointer"
+              className="relative flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-2xl bg-rose-50/70 hover:bg-rose-100/80 text-rose-600 border border-rose-100 transition-all group cursor-pointer"
             >
               <div className="relative flex items-center justify-center">
-                <span className="text-lg group-hover:scale-110 transition-transform">❤️</span>
-                <span className="absolute -top-2.5 -right-2 bg-rose-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+                <span className="text-base sm:text-lg group-hover:scale-110 transition-transform">❤️</span>
+                <span className="absolute -top-2 -right-1.5 sm:-top-2.5 sm:-right-2 bg-rose-600 text-white text-[8px] sm:text-[9px] font-black w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
                   0
                 </span>
               </div>
@@ -162,11 +206,11 @@ export default function SiteHeader() {
             <button
               type="button"
               onClick={() => setIsCartOpen(true)}
-              className="relative flex items-center gap-2.5 bg-emerald-50/80 hover:bg-emerald-100 text-[#00875A] px-3.5 py-2 rounded-2xl border border-emerald-200/60 transition-all cursor-pointer shadow-2xs group"
+              className="relative flex items-center gap-1.5 sm:gap-2.5 bg-emerald-50/80 hover:bg-emerald-100 text-[#00875A] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl border border-emerald-200/60 transition-all cursor-pointer shadow-2xs group"
             >
               <div className="relative flex items-center justify-center">
-                <span className="text-lg group-hover:scale-110 transition-transform">🛒</span>
-                <span className="absolute -top-2.5 -right-2.5 bg-[#F25C05] text-white text-[9px] font-black min-w-[18px] h-4.5 px-1 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
+                <span className="text-base sm:text-lg group-hover:scale-110 transition-transform">🛒</span>
+                <span className="absolute -top-2 -right-1.5 sm:-top-2.5 sm:-right-2.5 bg-[#F25C05] text-white text-[8px] sm:text-[9px] font-black min-w-[16px] sm:min-w-[18px] h-3.5 sm:h-4.5 px-1 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
                   {totalItemsCount}
                 </span>
               </div>
@@ -181,95 +225,93 @@ export default function SiteHeader() {
             </button>
 
             {/* USER PROFILE AREA */}
-            <div className="flex items-center gap-2 ml-1" ref={dropdownRef}>
+            <div className="flex items-center gap-1 ml-0.5 sm:ml-1" ref={dropdownRef}>
               {isPending ? (
-                <div className="text-xs font-bold text-[#00875A] animate-pulse px-2">
+                <div className="text-xs font-bold text-[#00875A] animate-pulse px-1">
                   যাচাই হচ্ছে...
                 </div>
               ) : currentUser ? (
-                <div className="flex items-center gap-2.5">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setDropdownOpen(!dropdownOpen)}
-                      className="flex items-center gap-2 bg-gray-50 hover:bg-emerald-50/60 border border-gray-200 hover:border-emerald-300 p-1.5 pl-2 pr-2.5 rounded-2xl transition-all cursor-pointer shadow-2xs group"
-                    >
-                      <div className="relative">
-                        <img
-                          src={
-                            currentUser.profileImage ||
-                            currentUser.image ||
-                            defaultHumanAvatar
-                          }
-                          alt={currentUser.name || "User"}
-                          className="w-8 h-8 rounded-xl object-cover border border-emerald-500/30 group-hover:scale-105 transition-transform"
-                        />
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                <div className="flex items-center gap-2.5 relative">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex items-center gap-1 sm:gap-2 bg-gray-50 hover:bg-emerald-50/60 border border-gray-200 hover:border-emerald-300 p-1 pl-1.5 sm:pl-2 pr-2 sm:pr-2.5 rounded-2xl transition-all cursor-pointer shadow-2xs group"
+                  >
+                    <div className="relative">
+                      <img
+                        src={
+                          currentUser.profileImage ||
+                          currentUser.image ||
+                          defaultHumanAvatar
+                        }
+                        alt={currentUser.name || "User"}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-emerald-500/30 group-hover:scale-105 transition-transform"
+                      />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                    </div>
+
+                    <span className="hidden sm:block text-xs font-black text-gray-900 max-w-[110px] truncate">
+                      {currentUser.name}
+                    </span>
+
+                    <svg className={`w-3 h-3 text-gray-400 group-hover:text-[#00875A] transform transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown Menu - Perfectly positioned under profile button */}
+                  {dropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
+                        <p className="text-xs font-black text-gray-900 truncate">{currentUser.name}</p>
+                        <p className="text-[10px] text-gray-500 font-medium truncate">ID: {finalUserId}</p>
                       </div>
 
-                      <span className="hidden sm:block text-xs font-black text-gray-900 max-w-[110px] truncate">
-                        {currentUser.name}
-                      </span>
+                      <Link
+                        href="/client/dashboard"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
+                      >
+                        <span>📊</span>
+                        <span>My Dashboard</span>
+                      </Link>
 
-                      <svg className={`w-3 h-3 text-gray-400 group-hover:text-[#00875A] transform transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+                      <Link
+                        href="/client/orders"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
+                      >
+                        <span>📋</span>
+                        <span>My Orders</span>
+                      </Link>
 
-                    {/* Dropdown Menu */}
-                    {dropdownOpen && (
-                      <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                        <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
-                          <p className="text-xs font-black text-gray-900 truncate">{currentUser.name}</p>
-                          <p className="text-[10px] text-gray-500 font-medium truncate">{currentUser.email || currentUser.mobile || currentUser.phone}</p>
-                        </div>
+                      <div className="border-t border-gray-100 my-1"></div>
 
-                        <Link
-                          href="/client/dashboard"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
-                        >
-                          <span>📊</span>
-                          <span>My Dashboard</span>
-                        </Link>
-
-                        <Link
-                          href="/client/orders"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
-                        >
-                          <span>📋</span>
-                          <span>My Orders</span>
-                        </Link>
-
-                        <div className="border-t border-gray-100 my-1"></div>
-
-                        <button
-                          onClick={handleLogout}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-left"
-                        >
-                          <span>🚪</span>
-                          <span>Logout Account</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer text-left"
+                      >
+                        <span>🚪</span>
+                        <span>Logout Account</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <>
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <Link
                     href="/login"
-                    className="px-4 py-2 border-2 border-gray-200 hover:border-[#00875A] text-gray-700 hover:text-[#00875A] text-xs font-extrabold rounded-2xl transition-all cursor-pointer bg-white"
+                    className="px-2.5 sm:px-4 py-1.5 sm:py-2 border-2 border-gray-200 hover:border-[#00875A] text-gray-700 hover:text-[#00875A] text-[11px] sm:text-xs font-extrabold rounded-xl sm:rounded-2xl transition-all cursor-pointer bg-white"
                   >
                     Login
                   </Link>
                   <Link
                     href="/register"
-                    className="px-4 py-2 bg-[#F25C05] hover:bg-[#D95000] text-white text-xs font-black rounded-2xl shadow-xs transition-all cursor-pointer"
+                    className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-[#F25C05] hover:bg-[#D95000] text-white text-[11px] sm:text-xs font-black rounded-xl sm:rounded-2xl shadow-xs transition-all cursor-pointer"
                   >
                     Register
                   </Link>
-                </>
+                </div>
               )}
             </div>
           </div>

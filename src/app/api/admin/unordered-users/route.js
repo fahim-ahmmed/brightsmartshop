@@ -61,6 +61,7 @@ export async function GET(req) {
         // ইউজার আইডি, ফোন বা ইমেইল যেকোনো একটি দিয়ে ম্যাচ করলেই পয়েন্ট ধরা হবে
         const earnedPoints = Math.max(
           userPointsMap[`id_${uid}`] || 0,
+                    user.authUserId ? userPointsMap[`id_${String(user.authUserId)}`] || 0 : 0,
           phone ? userPointsMap[`phone_${phone}`] || 0 : 0,
           email ? userPointsMap[`email_${email}`] || 0 : 0
         );

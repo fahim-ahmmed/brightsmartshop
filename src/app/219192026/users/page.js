@@ -7,9 +7,9 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState(""); // 🟢 সার্চ স্টেট
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // ইডিট মোডাল এর জন্য স্টেটসমূহ
+  // Edit Modal States
   const [editingUser, setEditingUser] = useState(null);
   const [editForm, setEditForm] = useState({
     userId: "",
@@ -31,12 +31,12 @@ export default function AdminUsersPage() {
         setUsers(userList);
       } else {
         setError("Failed to fetch users from server.");
-        toast.error("ইউজার ডাটা ফেচ করতে ব্যর্থ হয়েছে!");
+        toast.error("Failed to fetch user data!");
       }
     } catch (err) {
       console.error("Users loading error:", err);
       setError("Network or API endpoint issue.");
-      toast.error("নেটওয়ার্ক সমস্যা!");
+      toast.error("Network error!");
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, []);
 
-  // 🟢 সার্চ ফিল্টার লজিক
+  // Search Filter Logic
   const filteredUsers = users.filter((u) => {
     const q = searchTerm.toLowerCase();
     return (
@@ -56,24 +56,52 @@ export default function AdminUsersPage() {
     );
   });
 
-  // 🟢 সিরিয়াল ঠিক করার লজিক (১ থেকে ১০ পর্যন্ত সবার উপরে থাকবে)
+  // Sorting Logic (Top IDs on top)
   const sortedUsers = [...filteredUsers].sort((a, b) => {
-    // Top ID গুলোকে সবার উপরে রাখা
     if (a.isSystemFounder && !b.isSystemFounder) return -1;
     if (!a.isSystemFounder && b.isSystemFounder) return 1;
 
-    // যদি দুজনই Top ID হয়, তবে নামের শেষের সংখ্যা অনুযায়ী ১ থেকে ১০ সিরিয়াল করা
     if (a.isSystemFounder && b.isSystemFounder) {
       const numA = parseInt(a.name?.replace(/\D/g, "")) || 0;
       const numB = parseInt(b.name?.replace(/\D/g, "")) || 0;
       return numA - numB;
     }
 
-    // সাধারণ ইউজারদের ক্ষেত্রে ডাটাবেসের ডিফল্ট সিরিয়াল ঠিক রাখা
     return 0;
   });
 
-  // ১. ইডিট মোডাল ওপেন করা
+  // 🟢 Excel/CSV Download Handler
+  const handleDownloadExcel = () => {
+    if (!sortedUsers || sortedUsers.length === 0) {
+      toast.error("No users available to export!");
+      return;
+    }
+
+    // CSV Header: Name, Phone Number, Address, ID, Sponsor ID
+    let csvContent = "Name,Phone Number,Address,ID,Sponsor ID\n";
+
+    sortedUsers.forEach((u) => {
+      const name = `"${(u.name || "Customer").replace(/"/g, '""')}"`;
+      const phone = `"${getDisplayPhone(u).replace(/"/g, '""')}"`;
+      const address = `"${(u.address || u.deliveryAddress || "").replace(/"/g, '""')}"`;
+      const id = `"${(u._id || u.id || u.referralCode || "").replace(/"/g, '""')}"`;
+      const sponsorId = `"${(u.sponsorCode || u.referredBy || "").replace(/"/g, '""')}"`;
+
+      csvContent += `${name},${phone},${address},${id},${sponsorId}\n`;
+    });
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Registered_Users_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Excel sheet downloaded successfully!");
+  };
+
+  // 1. Open Edit Modal
   const handleOpenEditModal = (user) => {
     setEditingUser(user);
     setEditForm({
@@ -85,11 +113,11 @@ export default function AdminUsersPage() {
     });
   };
 
-  // ২. ইডিট ফর্ম সাবমিট করা
+  // 2. Submit Edit Form
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     setUpdating(true);
-    const toastId = toast.loading("ইউজারের তথ্য আপডেট হচ্ছে...");
+    const toastId = toast.loading("Updating user information...");
 
     try {
       const res = await fetch("/api/admin/users", {
@@ -101,23 +129,23 @@ export default function AdminUsersPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        toast.success(data.message || "তথ্য সফলভাবে আপডেট করা হয়েছে!", { id: toastId });
+        toast.success(data.message || "Information updated successfully!", { id: toastId });
         setEditingUser(null);
-        fetchUsers(); // ইউজার লিস্ট সাথে সাথে রিফ্রেশ হবে
+        fetchUsers();
       } else {
-        toast.error(data.message || "আপডেট করতে সমস্যা হয়েছে।", { id: toastId });
+        toast.error(data.message || "Failed to update information.", { id: toastId });
       }
     } catch (err) {
       console.error("Update error:", err);
-      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
+      toast.error("Server error occurred.", { id: toastId });
     } finally {
       setUpdating(false);
     }
   };
 
-  // ৩. ডিলিট ইউজার হ্যান্ডলার
+  // 3. Delete User Handler
   const handleDeleteUser = async (userId, userName) => {
-    const toastId = toast.loading(`"${userName || "এই ইউজার"}" ডিলিট হচ্ছে...`);
+    const toastId = toast.loading(`Deleting "${userName || "this user"}"...`);
 
     try {
       const res = await fetch(`/api/admin/users?id=${userId}`, {
@@ -128,13 +156,13 @@ export default function AdminUsersPage() {
 
       if (res.ok) {
         setUsers(users.filter((u) => (u._id || u.id) !== userId));
-        toast.success("ইউজার সফলভাবে ডিলিট করা হয়েছে!", { id: toastId });
+        toast.success("User deleted successfully!", { id: toastId });
       } else {
-        toast.error(data.message || "ইউজার ডিলিট করতে সমস্যা হয়েছে।", { id: toastId });
+        toast.error(data.message || "Failed to delete user.", { id: toastId });
       }
     } catch (err) {
       console.error("Delete user error:", err);
-      toast.error("সার্ভারে সমস্যা হয়েছে।", { id: toastId });
+      toast.error("Server error occurred.", { id: toastId });
     }
   };
 
@@ -158,29 +186,38 @@ export default function AdminUsersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 🟢 Download Excel Button */}
+          <button
+            onClick={handleDownloadExcel}
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>📊</span> Download Excel
+          </button>
+
           <button
             onClick={() => {
               fetchUsers();
-              toast.success("ইউজার লিস্ট রিফ্রেশ করা হয়েছে!");
+              toast.success("User list refreshed successfully!");
             }}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <span>🔄</span> Refresh Users
           </button>
+
           <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 rounded-xl">
             Total: {users.length}
           </span>
         </div>
       </div>
 
-      {/* 🟢 Search Box */}
+      {/* Search Box */}
       <div className="bg-[#1E293B] p-4 rounded-2xl border border-slate-800">
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="নাম বা ফোন নাম্বার দিয়ে খুঁজুন..."
+          placeholder="Search by name or phone number..."
           className="w-full sm:w-96 bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
         />
       </div>
@@ -225,7 +262,6 @@ export default function AdminUsersPage() {
                         <span className={u.isSystemFounder ? "text-amber-400" : ""}>
                           {u.name || "Customer User"}
                         </span>
-                        {/* 🟢 স্পেশাল ব্যাজ */}
                         {u.isSystemFounder && (
                           <span className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full uppercase shadow-md tracking-wider whitespace-nowrap">
                             👑 Top ID
@@ -258,14 +294,14 @@ export default function AdminUsersPage() {
                             onClick={() => handleOpenEditModal(u)}
                             className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-[11px] rounded-xl transition-all cursor-pointer border border-emerald-500/20 flex items-center gap-1"
                           >
-                            <span>✏️</span> ইডিট
+                            <span>✏️</span> Edit
                           </button>
 
                           <button
                             onClick={() => handleDeleteUser(uid, u.name)}
                             className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-[11px] rounded-xl transition-all cursor-pointer border border-rose-500/20"
                           >
-                            ডিলিট
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -280,7 +316,7 @@ export default function AdminUsersPage() {
             <div className="text-4xl">👥</div>
             <h3 className="text-sm font-bold text-white">No Users Found</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              কোনো রেজিস্টার্ড ইউজার পাওয়া যায়নি।
+              No registered users found.
             </p>
           </div>
         )}
@@ -293,7 +329,7 @@ export default function AdminUsersPage() {
             
             <div className="flex justify-between items-center border-b border-slate-700 pb-3">
               <h3 className="text-base font-black text-white flex items-center gap-2">
-                <span>✏️</span> ইউজার তথ্য সম্পাদনা করুন
+                <span>✏️</span> Edit User Information
               </h3>
               <button
                 onClick={() => setEditingUser(null)}
@@ -307,7 +343,7 @@ export default function AdminUsersPage() {
               
               {/* Name */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">ইউজার নাম (User Name) *</label>
+                <label className="text-xs font-bold text-slate-300">User Name *</label>
                 <input
                   type="text"
                   value={editForm.name}
@@ -319,7 +355,7 @@ export default function AdminUsersPage() {
 
               {/* Phone */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">মোবাইল নম্বর (Mobile Number) *</label>
+                <label className="text-xs font-bold text-slate-300">Mobile Number *</label>
                 <input
                   type="text"
                   value={editForm.phone}
@@ -331,19 +367,19 @@ export default function AdminUsersPage() {
 
               {/* Password */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">পাসওয়ার্ড (Password)</label>
+                <label className="text-xs font-bold text-slate-300">Password</label>
                 <input
                   type="text"
                   value={editForm.password}
                   onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                   className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-amber-300 focus:outline-none focus:border-emerald-500 font-mono"
-                  placeholder="নতুন পাসওয়ার্ড দিন"
+                  placeholder="Enter new password"
                 />
               </div>
 
               {/* Role */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300">অ্যাকাউন্ট রোল (Role)</label>
+                <label className="text-xs font-bold text-slate-300">Account Role</label>
                 <select
                   value={editForm.role}
                   onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
@@ -362,14 +398,14 @@ export default function AdminUsersPage() {
                   onClick={() => setEditingUser(null)}
                   className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
-                  বাতিল
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer"
                 >
-                  {updating ? "আপডেট হচ্ছে..." : "💾 সেভ করুন"}
+                  {updating ? "Updating..." : "💾 Save Changes"}
                 </button>
               </div>
 
