@@ -14,6 +14,12 @@ export default function RootLayout({ children }) {
 
   return (
     <html lang="en">
+      <head>
+        <title>Bright Smart Shop</title>
+        <link rel="icon" href="/logo.jpg" type="image/jpeg" />
+        <link rel="shortcut icon" href="/logo.jpg" />
+        <link rel="apple-touch-icon" href="/logo.jpg" />
+      </head>
       <body className="antialiased bg-[#0F172A] text-slate-100 font-sans">
         <CartProvider>
           {!isAdminPage && <SiteHeader />}
