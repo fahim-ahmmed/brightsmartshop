@@ -18,7 +18,7 @@ function orderQuery(targetId) {
   };
 }
 
-// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং ২৪ লেভেল ক্যালকুলেশন ইঞ্জিন
+// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং ২৪ লেভেল ক্যালকুলেশন ইঞ্জিন
 export async function processOrderToGlobalChain({ userId, userName, phone, points, orderNo }) {
   const addedPoints = Number(points || 0);
   if (addedPoints <= 0) return;
@@ -63,7 +63,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
   const previousReserve = Number(profile.reservePoints || 0);
   const totalAvailablePoints = previousReserve + addedPoints;
 
-  // ৪০ পয়েন্ট = ১টি প্যাকেজ, বাকি পয়েন্ট রিজার্ভে জমা থাকবে
+  // ৪০ পয়েন্ট = ১টি প্যাকেজ, বাকি পয়েন্ট রিজার্ভে জমা থাকবে
   const packagesGenerated = Math.floor(totalAvailablePoints / 40);
   const newReservePoints = totalAvailablePoints % 40;
 
@@ -108,6 +108,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
       packages: 1,
       accumulatedPackages: 0,
       currentLevel: 0,
+      earnedTaka: 0,
       createdAt: new Date(),
     });
 
@@ -137,6 +138,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
         }
       }
 
+      // 🟢 প্রোডাক্ট আইডির টাকা শুধু ওই প্রোডাক্ট আইডিতেই জমা থাকবে (ব্যাকএন্ডে), ইউজারের ওয়ালেটে যাবে না
       await chain.updateOne(
         { _id: up._id },
         {
@@ -145,10 +147,14 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
             currentLevel: newLevel,
             updatedAt: new Date(),
           },
+          ...(!up.isManId && rewardTaka > 0 ? { $inc: { earnedTaka: rewardTaka } } : {}),
         }
       );
 
-      // Man ID এবং Product ID উভয় নোডের রিওয়ার্ড টাকা ইউজারের মূল ওয়ালেটে যুক্ত করা
+      // প্রোডাক্ট আইডির ক্ষেত্রে ইউজারের লেভেল, ওয়ালেট বা প্রোফাইলে কিছু বদলাবে না
+      if (!up.isManId) continue;
+
+      // শুধু মেইন আইডির লেভেল ও টাকা ইউজারের মূল ওয়ালেটে যুক্ত করা
       const ownerFilter = {
         $or: [
           ...(ObjectId.isValid(up.userId) ? [{ _id: new ObjectId(up.userId) }] : []),
@@ -166,7 +172,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
             level: highestLevel,
             currentLevel: highestLevel,
             designation: designationFor(highestLevel),
-            ...(up.isManId ? { accumulatedPackages: newAccumulated } : {}),
+            accumulatedPackages: newAccumulated,
             updatedAt: new Date(),
           },
         };
@@ -194,8 +200,8 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
           await db.collection("wallet_history").insertOne({
             userId: String(ownerDoc._id),
             authUserId: String(ownerDoc.authUserId || ""),
-            chainAccountId: up.chainAccountId || (up.isManId ? "Man ID" : "Product ID"),
-            isManId: Boolean(up.isManId),
+            chainAccountId: up.chainAccountId || "Man ID",
+            isManId: true,
             amount: rewardTaka,
             fromLevel: previousLevel,
             toLevel: newLevel,
@@ -209,7 +215,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
   }
 }
 
-// আগে করা যেসব অর্ডার বাগের কারণে চেইনে ঢোকেনি সেগুলো স্বয়ংক্রিয়ভাবে সিঙ্ক করা
+// আগে করা যেসব অর্ডার বাগের কারণে চেইনে ঢোকেনি সেগুলো স্বয়ংক্রিয়ভাবে সিঙ্ক করা
 export async function syncPendingChainOrders() {
   const orders = db.collection("orders");
   const unSyncedOrders = await orders
@@ -364,7 +370,7 @@ export async function GET(req) {
   }
 }
 
-// ৩. স্ট্যাটাস আপডেট ও লেভেল/পয়েন্ট/টাকা প্রসেসিং (PATCH)
+// ৩. স্ট্যাটাস আপডেট ও লেভেল/পয়েন্ট/টাকা প্রসেসিং (PATCH)
 export async function PATCH(req) {
   try {
     const { orderId, orderNo, status, paymentStatus } = await req.json();

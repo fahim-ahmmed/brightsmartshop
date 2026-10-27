@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
@@ -8,6 +8,7 @@ import DashboardSidebar from "@/components/layout/DashboardSidebar";
 export default function ClientDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const lastFetchKeyRef = useRef(null);
 
   // Better Auth Live Session Hook
   const { data: session } = authClient?.useSession
@@ -15,21 +16,38 @@ export default function ClientDashboardPage() {
     : { data: null };
 
   useEffect(() => {
+    const localUserRaw =
+      typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
+    const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
+
+    const userId = session?.user?.id || localUser?._id || localUser?.id || "";
+    const phone =
+      session?.user?.mobile ||
+      session?.user?.phone ||
+      localUser?.mobile ||
+      localUser?.phone ||
+      "";
+    const email = session?.user?.email || localUser?.email || "";
+
+    // 🟢 একই ইউজারের জন্য দুইবার ফেচ করা বন্ধ (সেশন পরে লোড হলেও আবার ফেচ হবে না)
+    const fetchKey = userId || "anon";
+    if (lastFetchKeyRef.current === fetchKey) return;
+    lastFetchKeyRef.current = fetchKey;
+
+    // 🟢 আগে দেখা তথ্য সাথে সাথে দেখানো (এই ট্যাবের সেশনে), নতুন তথ্য এলে বদলে যাবে
+    const cacheKey = userId ? `bss_dash_${userId}` : "";
+    if (cacheKey) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          setData(JSON.parse(cached));
+          setLoading(false);
+        }
+      } catch (e) {}
+    }
+
     async function fetchStats() {
       try {
-        const localUserRaw =
-          typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
-        const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
-
-        const userId = session?.user?.id || localUser?._id || localUser?.id || "";
-        const phone =
-          session?.user?.mobile ||
-          session?.user?.phone ||
-          localUser?.mobile ||
-          localUser?.phone ||
-          "";
-        const email = session?.user?.email || localUser?.email || "";
-
         const params = new URLSearchParams();
         if (userId) params.set("userId", userId);
         if (phone) params.set("phone", phone);
@@ -41,6 +59,11 @@ export default function ClientDashboardPage() {
         if (res.ok) {
           const json = await res.json();
           setData(json);
+          if (cacheKey) {
+            try {
+              sessionStorage.setItem(cacheKey, JSON.stringify(json));
+            } catch (e) {}
+          }
         }
       } catch (err) {
         console.error("Failed to load dashboard statistics", err);
@@ -123,7 +146,7 @@ export default function ClientDashboardPage() {
       ? stats.accumulatedPackages
       : Math.floor((stats.newPurchasersAfterMe || 0) / 40);
 
-  // প্যাকেজ সংখ্যা অনুযায়ী সঠিক বর্তমান লেভেল ও পরবর্তী টার্গেট নির্ধারণ
+  // প্যাকেজ সংখ্যা অনুযায়ী সঠিক বর্তমান লেভেল ও পরবর্তী টার্গেট নির্ধারণ
   let calculatedLevel = 0;
   let currentDesignation = "New Member";
   for (const row of levelRequirements) {

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { ObjectId } from "mongodb";
 import { db } from "@/lib/mongo-client";
 import { getCurrentUser, syncMissingProfiles, TOP_10_FOUNDERS } from "@/lib/current-user";
@@ -10,7 +10,7 @@ const COLORS = ["#3B82F6", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"
 
 // 🟢 গ্লোবাল চেইন থেকে ডুপ্লিকেট মেইন আইডি পরিষ্কার ও লেভেল/ব্যালেন্স পুনরায় নিখুঁতভাবে হিসাব করার ফাংশন (সুপার-ফাস্ট Bulk অপারেশন সহ)
 async function normalizeAndRecalculateChain() {
-  // বারবার রিলোডে যাতে স্লো না হয়, তাই ৫ সেকেন্ডের মেমোরি ক্যাশ গার্ড
+  // বারবার রিলোডে যাতে স্লো না হয়, তাই ৫ সেকেন্ডের মেমোরি ক্যাশ গার্ড
   const now = Date.now();
   if (globalThis.__LAST_CHAIN_SYNC__ && now - globalThis.__LAST_CHAIN_SYNC__ < 5000) {
     return;
@@ -88,6 +88,12 @@ async function normalizeAndRecalculateChain() {
   const seenManIdForUser = new Set();
   const bulkOps = [];
 
+  // 🟢 দ্রুত হিসাব: প্রতিটি নোডের পরের আসল প্যাকেজ সংখ্যা একবারেই বের করা (ফাউন্ডার প্লেসহোল্ডার নোড ০ ধরা হয়)
+  const suffix = new Array(allNodes.length + 1).fill(0);
+  for (let k = allNodes.length - 1; k >= 0; k--) {
+    suffix[k] = suffix[k + 1] + (allNodes[k].isSystemFounder ? 0 : Number(allNodes[k].packages ?? 1));
+  }
+
   for (let i = 0; i < allNodes.length; i++) {
     const node = allNodes[i];
     const uid = String(node.userId || node.phone || "");
@@ -99,12 +105,7 @@ async function normalizeAndRecalculateChain() {
       shouldBeManId = true;
     }
 
-    // 🟢 এই নোডের পরে আসা সকল প্যাকেজ সংখ্যা গণনা (ফাউন্ডার ও সাধারণ অর্ডার সহ সব প্যাকেজ যুক্ত হবে, তাই ১০টি প্যাকেজই থাকবে)
-    let packagesAfter = 0;
-    for (let j = i + 1; j < allNodes.length; j++) {
-      const afterNode = allNodes[j];
-      packagesAfter += Number(afterNode.packages || 1);
-    }
+    const packagesAfter = suffix[i + 1];
 
     let calcLevel = 0;
     for (const c of LEVEL_CONFIG) {
@@ -153,10 +154,60 @@ async function normalizeAndRecalculateChain() {
   }
 }
 
-export async function GET(req) {
+// 🟢 ডেটাবেসে দরকারি ইনডেক্স (একবারই বসে, ফাইন্ড কুয়েরি দ্রুত করে)
+async function ensureDashboardIndexes() {
+  if (globalThis.__BSS_DASH_IDX__) return;
+  globalThis.__BSS_DASH_IDX__ = true;
+  await Promise.all([
+    db.collection("global_chain").createIndex({ sequenceNo: 1 }),
+    db.collection("global_chain").createIndex({ userId: 1 }),
+    db.collection("global_chain").createIndex({ authUserId: 1 }),
+    db.collection("orders").createIndex({ userId: 1, createdAt: -1 }),
+    db.collection("orders").createIndex({ profileId: 1 }),
+    db.collection("users").createIndex({ phone: 1 }),
+    db.collection("users").createIndex({ referralCode: 1 }),
+  ]).catch(() => null);
+}
+
+// 🟢 ভারী রক্ষণাবেক্ষণ কাজ: ব্যবহারকারীকে অপেক্ষা না করিয়ে উত্তর পাঠানোর পরে, সর্বোচ্চ ৬০ সেকেন্ডে একবার চলে
+async function runMaintenance() {
+  const now = Date.now();
+  if (globalThis.__BSS_MAINT_RUNNING__) return;
+  if (globalThis.__BSS_MAINT_LAST__ && now - globalThis.__BSS_MAINT_LAST__ < 60000) return;
+  globalThis.__BSS_MAINT_RUNNING__ = true;
+  globalThis.__BSS_MAINT_LAST__ = now;
   try {
+    await ensureDashboardIndexes();
     await syncMissingProfiles().catch(() => null);
     await normalizeAndRecalculateChain().catch(() => null);
+  } finally {
+    globalThis.__BSS_MAINT_RUNNING__ = false;
+  }
+}
+
+// 🟢 ক্যাটাগরি অনুযায়ী প্রোডাক্ট সংখ্যা: ৬০ সেকেন্ড ক্যাশ
+async function getCategoryGroups() {
+  const cached = globalThis.__BSS_CAT_CACHE__;
+  if (cached && Date.now() - cached.t < 60000) return cached.v;
+  const v = await db
+    .collection("products")
+    .aggregate([
+      { $group: { _id: { $ifNull: ["$categoryName", "$category"] }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ])
+    .toArray();
+  globalThis.__BSS_CAT_CACHE__ = { t: Date.now(), v };
+  return v;
+}
+
+export async function GET(req) {
+  try {
+    // ভারী কাজগুলো উত্তর পাঠানোর পরে ব্যাকগ্রাউন্ডে চলবে
+    try {
+      after(runMaintenance);
+    } catch {
+      runMaintenance().catch(() => null);
+    }
 
     const { searchParams } = new URL(req.url);
     const paramUserId = searchParams.get("userId") || "";
@@ -170,7 +221,7 @@ export async function GET(req) {
     const usersCol = db.collection("users");
     const authCol = db.collection("user");
 
-    // ইউজারের সম্ভাব্য সকল ডুপ্লিকেট প্রোফাইল খুঁজে বের করা (যাতে ২০ টাকা ব্যালেন্স অন্য ডকুমেন্টে থাকলেও মিস না হয়)
+    // ইউজারের সম্ভাব্য সকল ডুপ্লিকেট প্রোফাইল খুঁজে বের করা (যাতে ২০ টাকা ব্যালেন্স অন্য ডকুমেন্টে থাকলেও মিস না হয়)
     const orQuery = [];
     if (paramUserId) {
       if (ObjectId.isValid(paramUserId)) {
@@ -213,7 +264,7 @@ export async function GET(req) {
     const allProfileIds = matchingProfiles.map((p) => String(p._id));
     const ownerIds = [...new Set([profileId, authId, paramUserId, ...allProfileIds].filter(Boolean))];
 
-    // ১. গ্লোবাল চেইন, অর্ডার, স্পন্সর, ওয়ালেট হিস্ট্রি এবং ক্যাটাগরি প্যারালালভাবে দ্রুত ফেচ করা
+    // ১. গ্লোবাল চেইন, অর্ডার, স্পন্সর এবং ক্যাটাগরি প্যারালালভাবে দ্রুত ফেচ করা
     const nodeQuery = { $or: [{ userId: { $in: ownerIds } }, { authUserId: { $in: ownerIds } }] };
     if (userPhone) nodeQuery.$or.push({ phone: userPhone });
     if (legacy?.name) nodeQuery.$or.push({ userName: legacy.name });
@@ -223,7 +274,7 @@ export async function GET(req) {
 
     const permanentId = legacy?.referralCode || profileId || authId || "20260048";
 
-    const [nodes, userOrders, sponsorListRaw, grouped, walletHistory] = await Promise.all([
+    const [nodes, userOrders, sponsorListRaw, grouped] = await Promise.all([
       db.collection("global_chain").find(nodeQuery).sort({ sequenceNo: 1 }).toArray(),
       db.collection("orders").find(orderQuery).sort({ createdAt: -1 }).toArray(),
       usersCol
@@ -237,34 +288,12 @@ export async function GET(req) {
         })
         .sort({ createdAt: -1 })
         .toArray(),
-      db
-        .collection("products")
-        .aggregate([
-          { $group: { _id: { $ifNull: ["$categoryName", "$category"] }, count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-        ])
-        .toArray(),
-      db
-        .collection("wallet_history")
-        .find({ $or: [{ userId: { $in: ownerIds } }, { authUserId: { $in: ownerIds } }] })
-        .toArray()
-        .catch(() => []),
+      getCategoryGroups(),
     ]);
 
     const manNode = nodes.find((n) => n.isManId) || nodes[0] || null;
     const packagesInNetwork = manNode?.accumulatedPackages ?? 0;
 
-    // প্রতিটি নোড থেকে অর্জিত মোট লেভেল রিওয়ার্ড টাকা হিসাব করা
-    let totalEarnedFromLevels = 0;
-    for (const n of nodes) {
-      const lvl = n.currentLevel || 0;
-      for (let l = 1; l <= lvl; l++) {
-        const cfg = LEVEL_CONFIG.find((c) => c.level === l);
-        if (cfg) totalEarnedFromLevels += cfg.taka;
-      }
-    }
-
-    const historyEarned = walletHistory.reduce((sum, h) => sum + Number(h.amount || 0), 0);
     const maxProfileWallet = matchingProfiles.reduce(
       (max, p) => Math.max(max, Number(p.walletBalance || 0)),
       Number(legacy?.walletBalance || authUser?.walletBalance || 0)
@@ -272,8 +301,8 @@ export async function GET(req) {
 
     const level = manNode ? manNode.currentLevel || 0 : legacy?.level || 0;
 
-    // ওয়ালেট ব্যালেন্স সিঙ্ক করা (প্রোফাইল, হিস্ট্রি ও লেভেল রিওয়ার্ডের মধ্যে সর্বোচ্চ সঠিক ব্যালেন্সটি নেওয়া)
-    let walletBalance = Math.max(maxProfileWallet, totalEarnedFromLevels, historyEarned);
+    // 🟢 ওয়ালেট ব্যালেন্স: শুধু প্রোফাইলের আসল ব্যালেন্স (অর্ডার পুরস্কারের সময় যা যোগ হয়)। নোড বা লেভেল থেকে আলাদা করে টাকা হিসাব করা হবে না
+    let walletBalance = maxProfileWallet;
     if (legacy && (walletBalance !== Number(legacy.walletBalance || 0) || level !== Number(legacy.level || 0))) {
       await usersCol.updateOne(
         { _id: legacy._id },
@@ -281,7 +310,9 @@ export async function GET(req) {
       ).catch(() => null);
     }
 
-    const ownPackages = nodes.length;
+    // 🟢 নিজের অর্ডার করা প্যাকেজ: ফাউন্ডারের আগে থেকে বসানো আইডি গোনা হবে না, শুধু নিজে কেনা প্যাকেজ
+    const ownedNodes = nodes.filter((n) => !n.isSystemFounder);
+    const ownPackages = ownedNodes.length;
     const reservePoints = matchingProfiles.reduce(
       (max, p) => Math.max(max, Number(p.reservePoints || 0)),
       Number(legacy?.reservePoints || 0)
@@ -342,7 +373,8 @@ export async function GET(req) {
         totalSponsors: sponsorList.length,
         sponsorsList: sponsorList,
       },
-      myChainNodes: nodes.map((n) => ({
+      // 🟢 তালিকায়ও শুধু নিজের অর্ডার করা আইডি দেখাবে
+      myChainNodes: ownedNodes.map((n) => ({
         _id: String(n._id),
         sequenceNo: n.sequenceNo,
         chainAccountId: n.chainAccountId || (n.isManId ? `M-${n.sequenceNo}` : `P-${n.sequenceNo}`),

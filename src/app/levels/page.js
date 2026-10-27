@@ -59,7 +59,7 @@ export default function LevelsPage() {
     <div className="min-h-screen bg-gray-100 font-sans flex flex-col lg:flex-row text-gray-800 w-full">
       <DashboardSidebar />
 
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1100px] w-full mx-auto space-y-6">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1100px] w-full mx-auto space-y-6 overflow-x-hidden">
         <div className="bg-[#0F172A] text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
           <div>
             <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">
@@ -69,7 +69,7 @@ export default function LevelsPage() {
               How Will Customers Benefit
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              আপনার মেইন আইডির পর গ্লোবাল চেইনে নতুন প্যাকেজ যুক্ত হলে স্বয়ংক্রিয়ভাবে লেভেল আপ ও ক্যাশব্যাক বোনাস যোগ হবে।
+              আপনার মেইন আইডির পর গ্লোবাল চেইনে নতুন প্যাকেজ যুক্ত হলে স্বয়ংক্রিয়ভাবে লেভেল আপ ও ক্যাশব্যাক বোনাস যোগ হবে।
             </p>
           </div>
 
@@ -82,7 +82,7 @@ export default function LevelsPage() {
             </div>
 
             <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
-              <span className="text-xs font-bold text-slate-400 block">মেইন আইডির পর নেটওয়ার্ক প্যাকেজ</span>
+              <span className="text-xs font-bold text-slate-400 block">মেইন আইডির পর নেটওয়ার্ক প্যাকেজ</span>
               <span className="text-2xl font-black text-amber-400 mt-1 block">
                 {loading ? "..." : `${networkPackages} Pkg`}
               </span>
@@ -96,16 +96,15 @@ export default function LevelsPage() {
             </div>
           </div>
 
-          {/* Level Table */}
+          {/* Level Table (মোবাইল ভিউতে যাতে ব্যাজ বা টেক্সট ভেঙে না যায় সেজন্য whitespace-nowrap দেওয়া হয়েছে) */}
           <div className="overflow-x-auto rounded-2xl border border-slate-800">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-950 text-slate-400 uppercase font-black text-[10px] border-b border-slate-800">
-                  <th className="py-3.5 px-4">LEVEL</th>
-                   
-                  <th className="py-3.5 px-4">TAKA (CASHBACK)</th>
-                  <th className="py-3.5 px-4">DESIGNATION</th>
-                  <th className="py-3.5 px-4 text-right">STATUS</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">LEVEL</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">TAKA (CASHBACK)</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">DESIGNATION</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">STATUS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80 bg-[#0B132B]">
@@ -116,19 +115,18 @@ export default function LevelsPage() {
                       key={row.level}
                       className={achieved ? "bg-emerald-500/10" : "hover:bg-slate-900/60"}
                     >
-                      <td className="py-3.5 px-4 font-black text-white">{row.level}</td>
-                      
-                      <td className="py-3.5 px-4 font-black text-emerald-400">
+                      <td className="py-3.5 px-4 font-black text-white whitespace-nowrap">{row.level}</td>
+                      <td className="py-3.5 px-4 font-black text-emerald-400 whitespace-nowrap">
                         ৳ {String(row.taka).padStart(2, "0")}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-block whitespace-nowrap px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black">
                           {row.designation}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         {achieved ? (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-black">
+                          <span className="inline-block whitespace-nowrap px-2.5 py-1 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-black">
                             ✓ Achieved
                           </span>
                         ) : (

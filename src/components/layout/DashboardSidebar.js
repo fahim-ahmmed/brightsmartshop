@@ -32,7 +32,7 @@ export default function DashboardSidebar() {
     { label: "My Levels", href: "/levels", icon: "👑" },
     { label: "My Account", href: "/client/account", icon: "👤" },
     { label: "Shop History", href: "/client/orders", icon: "🛍️" },
-    { label: "Shop Now", href: "/shop", icon: "🛒" },
+     
     { label: "Withdraw", href: "/client/withdraw", icon: "💳" },
     { label: "My Sponsor List", href: "/client/sponsors", icon: "👥" },
     { label: "Reports", href: "/client/reports", icon: "📄" },

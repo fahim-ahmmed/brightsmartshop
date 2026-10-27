@@ -34,11 +34,11 @@ export default function UnorderedCustomersPage() {
           totalDefaulters: data.totalDefaulters || 0,
         });
       } else {
-        toast.error("তালিকা লোড করতে সমস্যা হয়েছে!");
+        toast.error("তালিকা লোড করতে সমস্যা হয়েছে!");
       }
     } catch (err) {
       console.error(err);
-      toast.error("নেটওয়ার্ক সমস্যা!");
+      toast.error("নেটওয়ার্ক সমস্যা!");
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ export default function UnorderedCustomersPage() {
     fetchDefaulters(forcePreview);
   }, [forcePreview]);
 
-  // নাম, ফোন বা ইমেইল দিয়ে সার্চ ফিল্টার
+  // নাম, ফোন বা ইমেইল দিয়ে সার্চ ফিল্টার
   const filteredUsers = users.filter((u) => {
     const q = searchTerm.toLowerCase().trim();
     if (!q) return true;
@@ -63,7 +63,7 @@ export default function UnorderedCustomersPage() {
   const copyToClipboard = (text, label) => {
     if (!text || text === "N/A") return;
     navigator.clipboard.writeText(text);
-    toast.success(`${label} কপি করা হয়েছে: ${text}`);
+    toast.success(`${label} কপি করা হয়েছে: ${text}`);
   };
 
   return (
@@ -85,7 +85,7 @@ export default function UnorderedCustomersPage() {
             Unordered Customers (Defaulter List)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            চলতি মাসের ১ থেকে ২০ তারিখের মধ্যে যারা অন্তত ১টি প্যাকেজ (৪০ পয়েন্ট) অর্ডার সম্পন্ন করেনি তাদের তালিকা।
+            চলতি মাসের ১ থেকে ২০ তারিখের মধ্যে যারা অন্তত ১টি প্যাকেজ (৪০ পয়েন্ট) অর্ডার সম্পন্ন করেনি তাদের তালিকা।
           </p>
         </div>
 
@@ -114,10 +114,10 @@ export default function UnorderedCustomersPage() {
         <div className="bg-amber-500/10 border border-amber-500/40 p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-sm font-black text-amber-400">
-              ⏳ অর্ডারের সময়সীমা এখনো চলমান (আজ মাসের {meta.currentDay} তারিখ)
+              ⏳ অর্ডারের সময়সীমা এখনো চলমান (আজ মাসের {meta.currentDay} তারিখ)
             </h3>
             <p className="text-xs text-slate-300">
-              সিস্টেম রুলস অনুযায়ী ইউজারদের মাসের ১ থেকে ২০ তারিখ পর্যন্ত অর্ডার করার সুযোগ রয়েছে। ২১ তারিখ শুরু হলেই তালিকাটি এখানে স্বয়ংক্রিয়ভাবে প্রদর্শিত হবে।
+              সিস্টেম রুলস অনুযায়ী ইউজারদের মাসের ১ থেকে ২০ তারিখ পর্যন্ত অর্ডার করার সুযোগ রয়েছে। ২১ তারিখ শুরু হলেই তালিকাটি এখানে স্বয়ংক্রিয়ভাবে প্রদর্শিত হবে।
             </p>
           </div>
           <button
@@ -136,7 +136,7 @@ export default function UnorderedCustomersPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="নাম, ফোন নাম্বার বা ইমেইল দিয়ে খুঁজুন..."
+            placeholder="নাম, ফোন নাম্বার বা ইমেইল দিয়ে খুঁজুন..."
             className="w-full bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
           />
         </div>
@@ -162,8 +162,8 @@ export default function UnorderedCustomersPage() {
                   <th className="py-4 px-5">Phone Number</th>
                   <th className="py-4 px-5">Email Address</th>
                   <th className="py-4 px-5">Address & Details</th>
-                  <th className="py-4 px-5 text-center">1st-20th Points</th>
-                  <th className="py-4 px-5 text-right">Quick Contact</th>
+                  <th className="py-4 px-5 text-center whitespace-nowrap">1st-20th Points</th>
+                  <th className="py-4 px-5 text-right whitespace-nowrap">Quick Contact</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/70">
@@ -175,8 +175,8 @@ export default function UnorderedCustomersPage() {
 
                     {/* নাম ও সাইন-আপ তারিখ */}
                     <td className="py-4 px-5">
-                      <p className="font-black text-white text-sm">{u.name}</p>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                      <p className="font-black text-white text-sm whitespace-nowrap">{u.name}</p>
+                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 whitespace-nowrap">
                         <span>Joined: {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "N/A"}</span>
                         {u.referralId !== "N/A" && (
                           <span className="bg-slate-800 text-amber-300 px-2 py-0.5 rounded border border-slate-700 font-mono">
@@ -187,7 +187,7 @@ export default function UnorderedCustomersPage() {
                     </td>
 
                     {/* ফোন নাম্বার (কপি বাটন সহ) */}
-                    <td className="py-4 px-5">
+                    <td className="py-4 px-5 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-black text-emerald-400 text-xs">
                           {u.phone}
@@ -205,7 +205,7 @@ export default function UnorderedCustomersPage() {
                     </td>
 
                     {/* ইমেইল অ্যাড্রেস */}
-                    <td className="py-4 px-5">
+                    <td className="py-4 px-5 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span className="text-slate-200 font-medium">{u.email}</span>
                         {u.email !== "N/A" && (
@@ -221,7 +221,7 @@ export default function UnorderedCustomersPage() {
                     </td>
 
                     {/* ঠিকানা ও লেভেল */}
-                    <td className="py-4 px-5">
+                    <td className="py-4 px-5 whitespace-nowrap">
                       <p className="text-slate-300 max-w-[200px] truncate" title={u.address}>
                         📍 {u.address}
                       </p>
@@ -230,23 +230,23 @@ export default function UnorderedCustomersPage() {
                       </span>
                     </td>
 
-                    {/* পয়েন্ট স্ট্যাটাস */}
-                    <td className="py-4 px-5 text-center">
-                      <span className="px-2.5 py-1 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-full font-black text-[10px]">
+                    {/* পয়েন্ট স্ট্যাটাস (মোবাইল ভিউতে না ভাঙার জন্য ফিক্সড) */}
+                    <td className="py-4 px-5 text-center whitespace-nowrap">
+                      <span className="inline-block whitespace-nowrap px-3 py-1 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-full font-black text-[10px]">
                         {u.earnedPointsThisPeriod} / 40 Pts
                       </span>
-                      <span className="block text-[9px] text-slate-400 mt-1">
-                        বাকি: {u.shortfallPoints} পয়েন্ট
+                      <span className="block whitespace-nowrap text-[9px] text-slate-400 mt-1">
+                        বাকি: {u.shortfallPoints} পয়েন্ট
                       </span>
                     </td>
 
                     {/* সরাসরি কল বা ইমেইল বাটন */}
-                    <td className="py-4 px-5 text-right">
+                    <td className="py-4 px-5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         {u.phone !== "N/A" && (
                           <a
                             href={`tel:${u.phone}`}
-                            className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl font-bold text-[10px] transition-all"
+                            className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl font-bold text-[10px] transition-all"
                           >
                             📞 Call
                           </a>
@@ -254,7 +254,7 @@ export default function UnorderedCustomersPage() {
                         {u.email !== "N/A" && (
                           <a
                             href={`mailto:${u.email}`}
-                            className="px-2.5 py-1.5 bg-sky-500/10 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/30 rounded-xl font-bold text-[10px] transition-all"
+                            className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-1.5 bg-sky-500/10 hover:bg-sky-600 text-sky-400 hover:text-white border border-sky-500/30 rounded-xl font-bold text-[10px] transition-all"
                           >
                             ✉️ Email
                           </a>
@@ -270,10 +270,10 @@ export default function UnorderedCustomersPage() {
           <div className="p-16 text-center space-y-2">
             <div className="text-4xl">🎉</div>
             <h3 className="text-base font-black text-white">
-              কোনো আন-অর্ডার্ড ইউজার পাওয়া যায়নি!
+              কোনো আন-অর্ডার্ড ইউজার পাওয়া যায়নি!
             </h3>
             <p className="text-xs text-slate-400">
-              সব ইউজার তাদের মাসিক ৪০ পয়েন্টের প্যাকেজ অর্ডার সম্পন্ন করেছে অথবা এখনো মাসের ২১ তারিখ হয়নি।
+              সব ইউজার তাদের মাসিক ৪০ পয়েন্টের প্যাকেজ অর্ডার সম্পন্ন করেছে অথবা এখনো মাসের ২১ তারিখ হয়নি।
             </p>
           </div>
         )}
