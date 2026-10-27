@@ -22,7 +22,12 @@ export default function ClientDashboardPage() {
         const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
 
         const userId = session?.user?.id || localUser?._id || localUser?.id || "";
-        const phone = session?.user?.phone || localUser?.phone || "";
+        const phone =
+          session?.user?.mobile ||
+          session?.user?.phone ||
+          localUser?.mobile ||
+          localUser?.phone ||
+          "";
         const email = session?.user?.email || localUser?.email || "";
 
         const params = new URLSearchParams();
@@ -64,13 +69,11 @@ export default function ClientDashboardPage() {
       localUser?.email ||
       "fahim@example.com",
     avatar:
+      data?.user?.profileImage ||
       session?.user?.image ||
       localUser?.profileImage ||
       "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80",
   };
-
-  // 🟢 রেফার বা স্পন্সর পেজের আসল আইডি নিশ্চিত করার জন্য finalUserId
-  const finalUserId = data?.user?.id || localUser?.referralCode || localUser?.id || "20260048";
 
   const stats = data?.stats || {
     currentLevel: 0,
@@ -88,40 +91,55 @@ export default function ClientDashboardPage() {
   const myChainNodes = data?.myChainNodes || [];
   const recentOrders = data?.recentOrders || [];
 
-  const levelTargets = {
-    0: 3,
-    1: 5,
-    2: 9,
-    3: 16,
-    4: 33,
-    5: 65,
-    6: 129,
-    7: 257,
-    8: 513,
-    9: 1025,
-    10: 2049,
-    11: 4097,
-    12: 8193,
-    13: 16385,
-    14: 32769,
-    15: 65537,
-    16: 131073,
-    17: 262145,
-    18: 524289,
-    19: 1048577,
-    20: 2097153,
-    21: 4194305,
-    22: 8388609,
-    23: 16777217,
-    24: 16777217,
-  };
+  const levelRequirements = [
+    { level: 1, required: 3, designation: "Preferred Customer" },
+    { level: 2, required: 5, designation: "Preferred Customer" },
+    { level: 3, required: 9, designation: "Preferred Customer" },
+    { level: 4, required: 16, designation: "Preferred Customer" },
+    { level: 5, required: 33, designation: "General Customer" },
+    { level: 6, required: 65, designation: "General Customer" },
+    { level: 7, required: 129, designation: "General Customer" },
+    { level: 8, required: 257, designation: "General Customer" },
+    { level: 9, required: 513, designation: "General Customer" },
+    { level: 10, required: 1025, designation: "Regular Customer" },
+    { level: 11, required: 2049, designation: "Regular Customer" },
+    { level: 12, required: 4097, designation: "Regular Customer" },
+    { level: 13, required: 8193, designation: "Regular Customer" },
+    { level: 14, required: 16385, designation: "Regular Customer" },
+    { level: 15, required: 32769, designation: "Special Customer" },
+    { level: 16, required: 65537, designation: "Special Customer" },
+    { level: 17, required: 131073, designation: "Silver Customer" },
+    { level: 18, required: 262145, designation: "Silver Customer" },
+    { level: 19, required: 524289, designation: "Gold Customer" },
+    { level: 20, required: 1048577, designation: "Gold Customer" },
+    { level: 21, required: 2097153, designation: "Diamond Customer" },
+    { level: 22, required: 4194305, designation: "Platinum Customer" },
+    { level: 23, required: 8388609, designation: "Royal Customer" },
+    { level: 24, required: 16777217, designation: "Crown Customer" },
+  ];
 
-  const currentLevel = stats.currentLevel || 0;
-  const nextLevelTargetPackages = levelTargets[currentLevel] || 3;
   const totalPackagesAfterMe =
     stats.accumulatedPackages !== undefined
       ? stats.accumulatedPackages
       : Math.floor((stats.newPurchasersAfterMe || 0) / 40);
+
+  // প্যাকেজ সংখ্যা অনুযায়ী সঠিক বর্তমান লেভেল ও পরবর্তী টার্গেট নির্ধারণ
+  let calculatedLevel = 0;
+  let currentDesignation = "New Member";
+  for (const row of levelRequirements) {
+    if (totalPackagesAfterMe >= row.required) {
+      calculatedLevel = row.level;
+      currentDesignation = row.designation;
+    } else {
+      break;
+    }
+  }
+
+  const currentLevel = Math.max(Number(stats.currentLevel || 0), calculatedLevel);
+  const nextLevelObj =
+    levelRequirements.find((r) => r.level === currentLevel + 1) ||
+    levelRequirements[levelRequirements.length - 1];
+  const nextLevelTargetPackages = nextLevelObj.required;
 
   const reservePoints = Number(stats.reservePoints || 0);
   const pointsNeeded = 40 - (reservePoints % 40);
@@ -152,7 +170,7 @@ export default function ClientDashboardPage() {
     },
     {
       label: "Total Package (IDs)",
-      value: (stats.totalPackages || 0).toString(),
+      value: (myChainNodes.length || stats.totalPackages || 0).toString(),
       subtext: "40 Pts = 1 Package ID",
       icon: "✦",
       bg: "bg-[#FFFBE6] text-amber-900 border-[#FFF5C2]",
@@ -165,14 +183,14 @@ export default function ClientDashboardPage() {
       bg: "bg-[#EBF5FF] text-sky-900 border-[#D6E8FF]",
     },
     {
-      label: "Pending Level",
+      label: "Network Packages",
       value: totalPackagesAfterMe.toString(),
-      subtext: "Packages after your Man ID",
+      subtext: `Target: ${nextLevelTargetPackages} Packages (for Level ${Math.min(24, currentLevel + 1)})`,
       icon: "👥",
       bg: "bg-[#F3E8FF] text-purple-900 border-[#E9D5FF]",
     },
     {
-      label: stats.designation ? stats.designation : "No Level",
+      label: currentDesignation,
       value: `Level ${currentLevel < 10 ? `0${currentLevel}` : currentLevel}`,
       subtext: `${totalPackagesAfterMe} packages in network`,
       icon: "🏆",
@@ -250,8 +268,7 @@ export default function ClientDashboardPage() {
               <div className="text-left leading-tight">
                 <div className="text-sm font-bold text-gray-900">{user.name}</div>
                 <div className="text-[11px] text-gray-500 font-medium">
-                  {stats.designation || `Level ${currentLevel}`} {" "}
-                   
+                  {currentDesignation} (Level {currentLevel})
                 </div>
               </div>
             </div>
@@ -359,7 +376,7 @@ export default function ClientDashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {myChainNodes.map((node, index) => (
                 <div
-                  key={index}
+                  key={node._id || index}
                   className={`p-4 rounded-2xl border flex items-center justify-between ${
                     node.isManId
                       ? "bg-emerald-50/70 border-emerald-300"
@@ -383,6 +400,9 @@ export default function ClientDashboardPage() {
                   <div className="text-right">
                     <div className="text-xs font-extrabold text-[#00875A]">
                       Level {node.currentLevel || 0}
+                    </div>
+                    <div className="text-[10px] text-gray-500 font-bold">
+                      {node.accumulatedPackages || 0} Pkg
                     </div>
                   </div>
                 </div>
@@ -689,14 +709,24 @@ export default function ClientDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td
-                        colSpan="3"
-                        className="py-6 text-center text-gray-400 text-xs italic"
-                      >
-                        No sponsored members yet.
-                      </td>
-                    </tr>
+                    {data?.sponsorList?.length > 0 ? (
+                      data.sponsorList.map((sp, i) => (
+                        <tr key={i} className="border-b border-gray-50">
+                          <td className="py-2 font-mono text-gray-500">{i + 1}</td>
+                          <td className="py-2 font-mono font-bold text-emerald-700">{sp.id}</td>
+                          <td className="py-2 font-bold text-gray-800">{sp.name}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="3"
+                          className="py-6 text-center text-gray-400 text-xs italic"
+                        >
+                          No sponsored members yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

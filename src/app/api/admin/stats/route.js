@@ -2,19 +2,25 @@ import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
 import { requireAdmin, syncMissingProfiles } from "@/lib/current-user";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req) {
   try {
     if (!(await requireAdmin(req, { allowSub: true }))) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
+
+    // সাইন-আপ করা সকল ইউজার এবং টপ ১০ আইডি সিঙ্ক করা
     await syncMissingProfiles();
+
     const client = await clientPromise;
     const db = client.db();
-    // ১. রিয়েল-টাইম কাস্টমার কাউন্ট (users বা user কালেকশন থেকে)
-    let totalCustomers = await db.collection("users").countDocuments({});
-    if (!totalCustomers || totalCustomers === 0) {
-      totalCustomers = await db.collection("user").countDocuments({});
-    }
+
+    // ১. রিয়েল-টাইম কাস্টমার কাউন্ট (অ্যাডমিন বাদে সকল ইউজার)
+    const totalCustomers = await db.collection("users").countDocuments({
+      role: { $nin: ["admin", "Admin", "Super Admin"] },
+    });
 
     // ২. মোট প্রোডাক্ট কাউন্ট
     const totalProducts = await db.collection("products").countDocuments({});
@@ -26,12 +32,12 @@ export async function GET(req) {
     const orders = await db.collection("orders").find({}).toArray();
     const totalOrders = orders.length;
 
-    // 🟢 ম্যান আইডি (M) এবং প্রোডাক্ট আইডি (P) অর্ডার কাউন্ট (অর্ডার পেজের লজিক অনুযায়ী)
+    // 🟢 ম্যান আইডি (M) এবং প্রোডাক্ট আইডি (P) অর্ডার কাউন্ট
     let manIdOrdersCount = 0;
     let productIdOrdersCount = 0;
 
     orders.forEach((ord) => {
-      const orderNo = (ord.orderNo || ord.orderId || "").toUpperCase();
+      const orderNo = String(ord.orderNo || ord.orderId || "").toUpperCase();
       if (orderNo.startsWith("M")) {
         manIdOrdersCount++;
       } else if (orderNo.startsWith("P")) {
@@ -39,16 +45,16 @@ export async function GET(req) {
       }
     });
 
-    // পেন্ডিং অর্ডার কাউন্ট (যেগুলোর status "Pending" বা ছোটহাতের "pending")
+    // পেন্ডিং অর্ডার কাউন্ট
     const pendingOrdersCount = orders.filter(
-      (ord) => (ord.status || "").toLowerCase() === "pending"
+      (ord) => String(ord.status || "").toLowerCase() === "pending"
     ).length;
 
-    // Total Revenue: শুধুমাত্র যে অর্ডারগুলোর পেমেন্ট বা স্ট্যাটাস "Paid", "Delivered" বা "Completed"
+    // Total Revenue: Paid, Delivered বা Completed অর্ডারগুলোর যোগফল
     const totalRevenue = orders
       .filter((ord) => {
-        const status = (ord.status || "").toLowerCase();
-        const payStatus = (ord.paymentStatus || "").toLowerCase();
+        const status = String(ord.status || "").toLowerCase();
+        const payStatus = String(ord.paymentStatus || "").toLowerCase();
         return (
           status === "paid" ||
           status === "delivered" ||
@@ -62,11 +68,12 @@ export async function GET(req) {
     // ৫. পেন্ডিং উইথড্রয়াল টাকার পরিমাণ হিসাব করা
     const withdrawals = await db.collection("withdrawals").find({}).toArray().catch(() => []);
     const pendingWithdrawals = withdrawals
-      .filter((w) => (w.status || "").toLowerCase() === "pending")
-      .reduce((sum, w) => sum + Number(w.amount || 0), 0);
+      .filter((w) => String(w.status || "").toLowerCase() === "pending")
+      .reduce((sum, w) => sum + Number(w.amount || (w.amountPaisa ? w.amountPaisa / 100 : 0)), 0);
 
     // সাম্প্রতিক ৫টি অর্ডার
-    const recentOrders = await db.collection("orders")
+    const recentOrders = await db
+      .collection("orders")
       .find({})
       .sort({ createdAt: -1 })
       .limit(5)
@@ -77,8 +84,8 @@ export async function GET(req) {
       stats: {
         totalCustomers,
         totalOrders,
-        manIdOrdersCount,     // 🟢 ড্যাশবোর্ডে ম্যান আইডি অর্ডারের সংখ্যা পাঠাবে
-        productIdOrdersCount, // 🟢 ড্যাশবোর্ডে প্রোডাক্ট আইডি অর্ডারের সংখ্যা পাঠাবে
+        manIdOrdersCount,
+        productIdOrdersCount,
         pendingOrders: pendingOrdersCount,
         totalRevenue,
         wishlistCount,
@@ -92,4 +99,3 @@ export async function GET(req) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }
-export const dynamic = "force-dynamic";

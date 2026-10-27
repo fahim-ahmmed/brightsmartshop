@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { authClient } from "@/lib/auth-client";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 
 // Bangladesh Top Commercial Banks List
@@ -69,13 +70,38 @@ export default function WithdrawPaymentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
+  // Better Auth Live Session Hook
+  const { data: session } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null };
+
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch("/api/client/dashboard-stats");
+        const localUserRaw =
+          typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
+        const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
+
+        const userId = session?.user?.id || localUser?._id || localUser?.id || "";
+        const phone =
+          session?.user?.mobile ||
+          session?.user?.phone ||
+          localUser?.mobile ||
+          localUser?.phone ||
+          "";
+        const email = session?.user?.email || localUser?.email || "";
+
+        const params = new URLSearchParams();
+        if (userId) params.set("userId", userId);
+        if (phone) params.set("phone", phone);
+        if (email) params.set("email", email);
+
+        const res = await fetch(`/api/client/dashboard-stats?${params.toString()}`, {
+          cache: "no-store",
+        });
         if (res.ok) {
           const json = await res.json();
-          setWalletBalance(json.stats?.walletBalance || 0);
+          setWalletBalance(Number(json.stats?.walletBalance || 0));
         }
       } catch (err) {
         console.error("Error fetching balance:", err);
@@ -84,7 +110,7 @@ export default function WithdrawPaymentPage() {
       }
     }
     fetchStats();
-  }, []);
+  }, [session]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -94,7 +120,7 @@ export default function WithdrawPaymentPage() {
     
     // ১. ন্যূনতম ১০০ টাকা ভ্যালিডেশন চেক
     if (!numericAmount || numericAmount < 100) {
-      setMessage({ type: "error", text: "সর্বনিম্ন ১০০ টাকা বা তার বেশি উইথড্র রিকোয়েস্ট করতে হবে।" });
+      setMessage({ type: "error", text: "সর্বনিম্ন ১০০ টাকা বা তার বেশি উইথড্র রিকোয়েস্ট করতে হবে।" });
       return;
     }
 
@@ -105,7 +131,13 @@ export default function WithdrawPaymentPage() {
 
     setSubmitting(true);
 
+    const localUserRaw =
+      typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
+    const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
+
     const withdrawalData = {
+      userId: session?.user?.id || localUser?._id || localUser?.id || "",
+      phone: session?.user?.phone || localUser?.phone || "",
       type: paymentType,
       amount: numericAmount,
       details:
@@ -131,7 +163,7 @@ export default function WithdrawPaymentPage() {
         body: JSON.stringify(withdrawalData),
       });
 
-      const resData = await res.json();
+      const resData = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         throw new Error(resData.message || "Failed to submit request.");

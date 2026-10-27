@@ -1,148 +1,138 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { authClient } from "@/lib/auth-client";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
+import { LEVEL_CONFIG } from "@/lib/level-config";
 
 export default function LevelsPage() {
-  const [userLevelInfo, setUserLevelInfo] = useState(null);
+  const [stats, setStats] = useState({
+    currentLevel: 0,
+    accumulatedPackages: 0,
+    totalPackages: 0,
+    walletBalance: 0,
+  });
   const [loading, setLoading] = useState(true);
 
-  // ২৪ লেভেলের ডাটা (Package বাদ দিয়ে)
-  const levelsData = [
-    { level: 1, taka: "00", designation: "Preferred Customer" },
-    { level: 2, taka: "03", designation: "" },
-    { level: 3, taka: "04", designation: "" },
-    { level: 4, taka: "08", designation: "" },
-    { level: 5, taka: "15", designation: "General Customer" },
-    { level: 6, taka: "32", designation: "" },
-    { level: 7, taka: "60", designation: "" },
-    { level: 8, taka: "100", designation: "" },
-    { level: 9, taka: "250", designation: "" },
-    { level: 10, taka: "510", designation: "Regular Customer" },
-    { level: 11, taka: "1025", designation: "" },
-    { level: 12, taka: "2050", designation: "" },
-    { level: 13, taka: "4050", designation: "" },
-    { level: 14, taka: "8200", designation: "" },
-    { level: 15, taka: "16000", designation: "Special Customer" },
-    { level: 16, taka: "30000", designation: "" },
-    { level: 17, taka: "65000", designation: "Silver Customer" },
-    { level: 18, taka: "100000", designation: "" },
-    { level: 19, taka: "250000", designation: "Gold Customer" },
-    { level: 20, taka: "350000", designation: "" },
-    { level: 21, taka: "800000", designation: "Diamond Customer" },
-    { level: 22, taka: "1500000", designation: "Platinum Customer" },
-    { level: 23, taka: "2000000", designation: "Royel Customer" },
-    { level: 24, taka: "5000000", designation: "Crown Customer" },
-  ];
+  const { data: session } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null };
 
   useEffect(() => {
-    async function fetchUserLevel() {
+    async function loadLevelStats() {
       try {
-        const savedUser = localStorage.getItem("bright_user");
-        if (!savedUser) {
-          setLoading(false);
-          return;
-        }
-        const user = JSON.parse(savedUser);
-        const userId = user.id || user._id;
+        const localUserRaw =
+          typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
+        const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
 
-        const res = await fetch(`/api/levels?userId=${userId}`);
+        const userId = session?.user?.id || localUser?._id || localUser?.id || "";
+        const phone = session?.user?.mobile || session?.user?.phone || localUser?.mobile || localUser?.phone || "";
+        const email = session?.user?.email || localUser?.email || "";
+
+        const params = new URLSearchParams();
+        if (userId) params.set("userId", userId);
+        if (phone) params.set("phone", phone);
+        if (email) params.set("email", email);
+
+        const res = await fetch(`/api/client/dashboard-stats?${params.toString()}`, {
+          cache: "no-store",
+        });
         if (res.ok) {
-          const data = await res.json();
-          setUserLevelInfo(data);
+          const json = await res.json();
+          if (json.stats) {
+            setStats(json.stats);
+          }
         }
-      } catch (err) {
-        console.error("Level info fetch error:", err);
+      } catch (e) {
+        console.error("Failed to fetch levels:", e);
       } finally {
         setLoading(false);
       }
     }
-    fetchUserLevel();
-  }, []);
+    loadLevelStats();
+  }, [session]);
 
-  // লজিক অনুযায়ী ডিফল্ট লেভেল ০ থেকে শুরু হবে
-  const currentLevel = userLevelInfo?.level !== undefined ? userLevelInfo.level : 0;
-  const currentPackages = userLevelInfo?.totalAccumulatedPackages || 0;
+  const currentLevel = Number(stats.currentLevel || 0);
+  const networkPackages = Number(stats.accumulatedPackages || 0);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-gray-100 font-sans flex flex-col lg:flex-row text-gray-800 w-full">
       <DashboardSidebar />
 
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1200px] mx-auto">
-        
-        {/* Header Title & Dynamic User Stats */}
-        <div className="bg-slate-800/80 p-6 rounded-3xl border border-slate-700/60 shadow-lg space-y-4">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1100px] w-full mx-auto space-y-6">
+        <div className="bg-[#0F172A] text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
           <div>
-            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">
               CUSTOMER BENEFIT PROGRAM
             </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              How Will Customers Benefits
+            <h1 className="text-2xl sm:text-3xl font-black text-white mt-1">
+              How Will Customers Benefit
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              Earn level upgrades based on your own purchase points and unlock level-up cashback benefits.
+              আপনার মেইন আইডির পর গ্লোবাল চেইনে নতুন প্যাকেজ যুক্ত হলে স্বয়ংক্রিয়ভাবে লেভেল আপ ও ক্যাশব্যাক বোনাস যোগ হবে।
             </p>
           </div>
 
-          {/* Dynamic User Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-            <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-700/50 space-y-1">
-              <p className="text-[11px] font-bold text-slate-400">বর্তমান লেভেল</p>
-              <h3 className="text-2xl font-black text-emerald-400">Level {currentLevel}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
+              <span className="text-xs font-bold text-slate-400 block">আপনার বর্তমান লেভেল</span>
+              <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                {loading ? "..." : `Level ${currentLevel}`}
+              </span>
             </div>
-            <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-700/50 space-y-1">
-              <p className="text-[11px] font-bold text-slate-400">মোট প্যাকেজ কাউন্ট</p>
-              <h3 className="text-2xl font-black text-amber-400">{currentPackages} Pkg</h3>
+
+            <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
+              <span className="text-xs font-bold text-slate-400 block">মেইন আইডির পর নেটওয়ার্ক প্যাকেজ</span>
+              <span className="text-2xl font-black text-amber-400 mt-1 block">
+                {loading ? "..." : `${networkPackages} Pkg`}
+              </span>
+            </div>
+
+            <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
+              <span className="text-xs font-bold text-slate-400 block">আমার নিজস্ব প্যাকেজ আইডি (M+P)</span>
+              <span className="text-2xl font-black text-sky-400 mt-1 block">
+                {loading ? "..." : `${stats.totalPackages || 0} IDs`}
+              </span>
             </div>
           </div>
 
-          {/* Progress Bar Card */}
-          <div className="pt-2 space-y-2">
-            <div className="flex justify-between text-xs font-bold">
-              <span className="text-emerald-400">Current Level: Level {currentLevel}</span>
-              <span className="text-slate-400">Total Packages: {currentPackages}</span>
-            </div>
-            <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-700">
-              <div 
-                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min((currentPackages / 100) * 100, 100)}%` }} 
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 24 Level Table Structure (Package Column Removed) */}
-        <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm">
+          {/* Level Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <table className="w-full text-left text-xs">
               <thead>
-                <tr className="bg-slate-950 text-slate-300 uppercase font-black tracking-wider text-[11px] border-b border-slate-700">
-                  <th className="py-4 px-6">Level</th>
-                  <th className="py-4 px-6">Taka (Cashback)</th>
-                  <th className="py-4 px-6">Designation</th>
+                <tr className="bg-slate-950 text-slate-400 uppercase font-black text-[10px] border-b border-slate-800">
+                  <th className="py-3.5 px-4">LEVEL</th>
+                   
+                  <th className="py-3.5 px-4">TAKA (CASHBACK)</th>
+                  <th className="py-3.5 px-4">DESIGNATION</th>
+                  <th className="py-3.5 px-4 text-right">STATUS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {levelsData.map((row) => {
-                  const isCurrent = row.level === currentLevel;
+              <tbody className="divide-y divide-slate-800/80 bg-[#0B132B]">
+                {LEVEL_CONFIG.map((row) => {
+                  const achieved = currentLevel >= row.level;
                   return (
                     <tr
                       key={row.level}
-                      className={`transition-colors ${
-                        isCurrent
-                          ? "bg-emerald-950/60 text-emerald-300 font-bold border-l-4 border-l-emerald-400"
-                          : "hover:bg-slate-800/80 text-slate-300"
-                      }`}
+                      className={achieved ? "bg-emerald-500/10" : "hover:bg-slate-900/60"}
                     >
-                      <td className="py-3.5 px-6 font-bold">{row.level}</td>
-                      <td className="py-3.5 px-6 font-extrabold text-emerald-400">৳ {row.taka}</td>
-                      <td className="py-3.5 px-6 font-semibold">
-                        {row.designation ? (
-                          <span className="px-3 py-1 bg-slate-900 border border-slate-700 rounded-full text-xs text-amber-400 font-bold">
-                            {row.designation}
+                      <td className="py-3.5 px-4 font-black text-white">{row.level}</td>
+                      
+                      <td className="py-3.5 px-4 font-black text-emerald-400">
+                        ৳ {String(row.taka).padStart(2, "0")}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black">
+                          {row.designation}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        {achieved ? (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-black">
+                            ✓ Achieved
                           </span>
                         ) : (
-                          <span className="text-slate-600">-</span>
+                          <span className="text-slate-500 font-bold text-[10px]">Locked</span>
                         )}
                       </td>
                     </tr>
@@ -152,7 +142,6 @@ export default function LevelsPage() {
             </table>
           </div>
         </div>
-
       </main>
     </div>
   );

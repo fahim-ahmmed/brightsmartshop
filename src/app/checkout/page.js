@@ -3,12 +3,17 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
+import { authClient } from "@/lib/auth-client";
 import toast from "react-hot-toast";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { cartItems, clearCart } = useCart() || {};
+
+  const { data: session, isPending: sessionLoading } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null, isPending: false };
 
   const buyId = searchParams.get("id");
   const buyTitle = searchParams.get("title");
@@ -29,26 +34,34 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
-  const [userSponsor, setUserSponsor] = useState(""); // 🟢 রেফারেল বা স্পন্সর কোড স্টেট
+  const [userSponsor, setUserSponsor] = useState("");
 
   useEffect(() => {
+    if (sessionLoading) return;
+
     const savedUser = localStorage.getItem("bright_user");
-    
-    if (!savedUser) {
+    const sessionUser = session?.user;
+
+    if (!savedUser && !sessionUser) {
       toast.error("অর্ডার করার আগে অনুগ্রহ করে লগিন করুন।");
-      router.push("/login"); 
+      router.push("/login");
     } else {
       try {
-        const user = JSON.parse(savedUser);
-        
-        // 🟢 ইউজারের প্রোফাইল বা লোকালস্টোরেজ থেকে স্পন্সর আইডি ধরার লজিক
-        const sponsor = user.sponsorId || user.sponsorCode || user.referredBy || user.sponsor || user.refId || user.referral || "";
+        const user = savedUser ? JSON.parse(savedUser) : {};
+        const sponsor =
+          user.sponsorId ||
+          user.sponsorCode ||
+          user.referredBy ||
+          user.sponsor ||
+          sessionUser?.sponsorCode ||
+          "";
         setUserSponsor(sponsor);
 
         setFormData((prev) => ({
           ...prev,
-          name: user.name || prev.name,
-          phone: user.phone || prev.phone,
+          name: user.name || sessionUser?.name || prev.name,
+          phone: user.phone || user.mobile || sessionUser?.mobile || prev.phone,
+          address: user.address || sessionUser?.address || prev.address,
         }));
       } catch (e) {
         console.error("User storage parse error", e);
@@ -56,7 +69,7 @@ function CheckoutContent() {
         setIsCheckingAuth(false);
       }
     }
-  }, [router]);
+  }, [router, session, sessionLoading]);
 
   const totalItemCount = isDirectBuy
     ? 1
@@ -65,14 +78,14 @@ function CheckoutContent() {
   const subtotalPrice = isDirectBuy
     ? Number(buyPrice)
     : (cartItems || []).reduce(
-        (acc, item) => acc + item.price * (item.quantity || 1),
+        (acc, item) => acc + Number(item.price || 0) * (item.quantity || 1),
         0
       );
 
   const totalPoints = isDirectBuy
     ? Number(buyPoint || 0)
     : (cartItems || []).reduce(
-        (acc, item) => acc + (item.points || item.point || 0) * (item.quantity || 1),
+        (acc, item) => acc + Number(item.points || item.point || 0) * (item.quantity || 1),
         0
       );
 
@@ -109,10 +122,10 @@ function CheckoutContent() {
 
     try {
       const savedUser = localStorage.getItem("bright_user");
-      let userId = null;
+      let userId = session?.user?.id || null;
       if (savedUser) {
         const parsedUser = JSON.parse(savedUser);
-        userId = parsedUser.id || parsedUser._id;
+        userId = userId || parsedUser._id || parsedUser.id;
       }
 
       const orderPayload = {
@@ -139,10 +152,11 @@ function CheckoutContent() {
           : cartItems,
         subtotalPrice,
         totalPoints,
+        points: totalPoints,
         deliveryCharge,
         totalAmount,
         status: "Pending",
-        sponsorId: userSponsor, // 🟢 এখানে স্পন্সর বা রেফারেল আইডি যুক্ত করে দেওয়া হলো
+        sponsorId: userSponsor,
         createdAt: new Date(),
       };
 
@@ -155,10 +169,10 @@ function CheckoutContent() {
       if (res.ok) {
         setIsOrderPlaced(true);
         toast.success("🎉 আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে!", { id: toastId });
-        
+
         if (!isDirectBuy && clearCart) clearCart();
-        
-        router.push("/client/orders"); 
+
+        router.push("/client/orders");
       } else {
         toast.error("অর্ডার জমা দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।", { id: toastId });
         setLoading(false);
@@ -254,10 +268,11 @@ function CheckoutContent() {
               />
             </div>
 
-            {/* 🟢 যদি ইউজারের কোনো স্পন্সর বা রেফারেল থাকে তা এখানে শো করতে পারেন */}
             {userSponsor && (
               <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-2">
-                <span className="text-amber-800 font-bold text-xs">🤝 আপনার রেফারেন্স আইডি: <span className="font-mono">{userSponsor}</span></span>
+                <span className="text-amber-800 font-bold text-xs">
+                  🤝 আপনার রেফারেন্স আইডি: <span className="font-mono">{userSponsor}</span>
+                </span>
               </div>
             )}
           </div>
@@ -433,8 +448,8 @@ function CheckoutContent() {
             type="submit"
             disabled={loading || isOrderPlaced}
             className={`w-full py-3.5 text-white font-black text-xs rounded-xl shadow-md transition-all ${
-              loading || isOrderPlaced 
-                ? "bg-gray-400 cursor-not-allowed" 
+              loading || isOrderPlaced
+                ? "bg-gray-400 cursor-not-allowed"
                 : "bg-[#00875A] hover:bg-[#00704A] cursor-pointer"
             }`}
           >

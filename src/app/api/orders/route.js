@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { db } from "@/lib/mongo-client";
-import { ensureProfile, getCurrentUser, requireAdmin } from "@/lib/current-user";
-import { LEVEL_CONFIG, RESERVED_TOP_POSITIONS } from "@/lib/level-config";
+import { ensureProfile, getCurrentUser, syncMissingProfiles } from "@/lib/current-user";
+import { LEVEL_CONFIG, RESERVED_TOP_POSITIONS, designationFor } from "@/lib/level-config";
 
 export const dynamic = "force-dynamic";
 
 const CANCELLED = ["Cancelled", "cancelled", "CANCELLED"];
-const unauthorized = () =>
-  NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
 function orderQuery(targetId) {
   return {
@@ -20,128 +18,304 @@ function orderQuery(targetId) {
   };
 }
 
-async function processOrderToGlobalChain({ userId, userName, points, orderNo }) {
-  const packagesGenerated = Math.floor(points / 40); // ৪০ পয়েন্ট = ১ প্যাকেজ
-  if (packagesGenerated <= 0) return;
+// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং ২৪ লেভেল ক্যালকুলেশন ইঞ্জিন
+export async function processOrderToGlobalChain({ userId, userName, phone, points, orderNo }) {
+  const addedPoints = Number(points || 0);
+  if (addedPoints <= 0) return;
+
+  // টপ ১০টি আইডি এবং সব প্রোফাইল সিঙ্ক থাকা নিশ্চিত করা
+  await syncMissingProfiles();
 
   const chain = db.collection("global_chain");
   const users = db.collection("users");
 
-  // চেইনে সবসময় users প্রোফাইলের আইডি দিয়ে নোড রাখা হয়
-  const profile = await ensureProfile(userId);
-  const nodeUserId = profile ? String(profile._id) : String(userId);
+  // ইউজারের প্রোফাইল খুঁজে বের করা
+  let profile = await ensureProfile(userId);
+  if (!profile && phone) {
+    profile = await users.findOne({ $or: [{ phone }, { mobile: phone }] });
+  }
+  if (!profile && ObjectId.isValid(userId)) {
+    profile = await users.findOne({
+      $or: [{ _id: new ObjectId(userId) }, { authUserId: String(userId) }],
+    });
+  }
 
-  const isManId = (await chain.countDocuments({ userId: nodeUserId })) === 0;
+  if (!profile) {
+    const safePhone = phone || String(userId);
+    const ins = await users.insertOne({
+      authUserId: String(userId),
+      name: userName || "Customer",
+      phone: phone || "",
+      mobile: phone || "",
+      email: `${safePhone}_${Date.now()}@brightsmartshop.local`,
+      role: "user",
+      level: 0,
+      walletBalance: 0,
+      reservePoints: 0,
+      totalPackages: 0,
+      referralCode: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+      createdAt: new Date(),
+    });
+    profile = await users.findOne({ _id: ins.insertedId });
+  }
 
-  // প্রথম ১০ পজিশন টপ আইডির জন্য সংরক্ষিত
-  const lastNode = await chain.findOne({}, { sort: { sequenceNo: -1 } });
-  const nextSequenceNo = Math.max((lastNode?.sequenceNo || 0) + 1, RESERVED_TOP_POSITIONS + 1);
+  const nodeUserId = String(profile._id);
+  const previousReserve = Number(profile.reservePoints || 0);
+  const totalAvailablePoints = previousReserve + addedPoints;
 
-  await chain.insertOne({
-    sequenceNo: nextSequenceNo,
-    userId: nodeUserId,
-    userName: profile?.name || userName || "Customer",
-    isManId,
-    points,
-    packages: packagesGenerated,
-    accumulatedPackages: 0,
-    currentLevel: 0,
-    createdAt: new Date(),
-  });
+  // ৪০ পয়েন্ট = ১টি প্যাকেজ, বাকি পয়েন্ট রিজার্ভে জমা থাকবে
+  const packagesGenerated = Math.floor(totalAvailablePoints / 40);
+  const newReservePoints = totalAvailablePoints % 40;
 
-  const upperNodes = await chain.find({ sequenceNo: { $lt: nextSequenceNo } }).toArray();
-
-  for (const up of upperNodes) {
-    const newTotal = (up.accumulatedPackages || 0) + packagesGenerated;
-    const previousLevel = up.currentLevel || 0;
-
-    let level = previousLevel;
-    for (const c of LEVEL_CONFIG) {
-      if (newTotal >= c.requiredPackages) level = Math.max(level, c.level);
-      else break;
+  await users.updateOne(
+    { _id: profile._id },
+    {
+      $set: { reservePoints: newReservePoints, updatedAt: new Date() },
+      $inc: { totalPointsEarned: addedPoints },
     }
+  );
 
-    let reward = 0;
-    for (let l = previousLevel + 1; l <= level; l++) reward += LEVEL_CONFIG[l - 1].taka;
+  if (packagesGenerated <= 0) return;
 
-    await chain.updateOne(
-      { _id: up._id },
-      { $set: { accumulatedPackages: newTotal, currentLevel: level } }
-    );
+  for (let i = 0; i < packagesGenerated; i++) {
+    const existingNodesCount = await chain.countDocuments({
+      $or: [{ userId: nodeUserId }, { authUserId: String(profile.authUserId || userId) }],
+    });
+    const isManId = existingNodesCount === 0;
 
-    // টাকা শুধু ম্যান আইডি নোডে ঢোকে
-    if (up.isManId) {
-      const filter = {
+    const lastNode = await chain.findOne({}, { sort: { sequenceNo: -1 } });
+    const nextSequenceNo = Math.max((lastNode?.sequenceNo || 0) + 1, RESERVED_TOP_POSITIONS + 1);
+
+    const randomDigits = Math.floor(100000 + Math.random() * 900000);
+    const chainAccountId = isManId
+      ? orderNo?.startsWith("M-")
+        ? orderNo
+        : `M-${randomDigits}`
+      : orderNo?.startsWith("P-") && i === 0
+      ? orderNo
+      : `P-${randomDigits}`;
+
+    await chain.insertOne({
+      sequenceNo: nextSequenceNo,
+      chainAccountId,
+      orderNo,
+      userId: nodeUserId,
+      authUserId: String(profile.authUserId || userId),
+      userName: profile.name || userName || "Customer",
+      phone: profile.phone || phone || "",
+      isManId,
+      points: 40,
+      packages: 1,
+      accumulatedPackages: 0,
+      currentLevel: 0,
+      createdAt: new Date(),
+    });
+
+    await users.updateOne({ _id: profile._id }, { $inc: { totalPackages: 1 } });
+
+    // 🟢 উপরের সকল নোডকে (Top 10 + সকল Man ID + সকল Product ID) হিট করা
+    const upperNodes = await chain.find({ sequenceNo: { $lt: nextSequenceNo } }).toArray();
+
+    for (const up of upperNodes) {
+      const newAccumulated = (up.accumulatedPackages || 0) + 1;
+      const previousLevel = up.currentLevel || 0;
+
+      let newLevel = previousLevel;
+      for (const c of LEVEL_CONFIG) {
+        if (newAccumulated >= c.requiredPackages) {
+          newLevel = Math.max(newLevel, c.level);
+        } else {
+          break;
+        }
+      }
+
+      let rewardTaka = 0;
+      if (newLevel > previousLevel) {
+        for (let l = previousLevel + 1; l <= newLevel; l++) {
+          const cfg = LEVEL_CONFIG.find((item) => item.level === l);
+          if (cfg) rewardTaka += cfg.taka;
+        }
+      }
+
+      await chain.updateOne(
+        { _id: up._id },
+        {
+          $set: {
+            accumulatedPackages: newAccumulated,
+            currentLevel: newLevel,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      // Man ID এবং Product ID উভয় নোডের রিওয়ার্ড টাকা ইউজারের মূল ওয়ালেটে যুক্ত করা
+      const ownerFilter = {
         $or: [
-          { _id: ObjectId.isValid(up.userId) ? new ObjectId(up.userId) : up.userId },
+          ...(ObjectId.isValid(up.userId) ? [{ _id: new ObjectId(up.userId) }] : []),
+          { _id: up.userId },
           { authUserId: String(up.userId) },
+          ...(up.phone ? [{ phone: up.phone }] : []),
         ],
       };
-      const update = { $set: { level, totalPackages: newTotal } };
-      if (reward > 0) update.$inc = { walletBalance: reward };
-      await users.updateOne(filter, update);
 
-      if (reward > 0) {
-        await db.collection("wallet_history").insertOne({
-          userId: String(up.userId),
-          amount: reward,
-          fromLevel: previousLevel,
-          toLevel: level,
+      const ownerDoc = await users.findOne(ownerFilter);
+      if (ownerDoc) {
+        const highestLevel = Math.max(ownerDoc.level || 0, newLevel);
+        const userUpdate = {
+          $set: {
+            level: highestLevel,
+            currentLevel: highestLevel,
+            designation: designationFor(highestLevel),
+            ...(up.isManId ? { accumulatedPackages: newAccumulated } : {}),
+            updatedAt: new Date(),
+          },
+        };
+
+        if (rewardTaka > 0) {
+          userUpdate.$inc = { walletBalance: rewardTaka };
+        }
+
+        await users.updateOne({ _id: ownerDoc._id }, userUpdate);
+
+        if (ownerDoc.authUserId && ObjectId.isValid(ownerDoc.authUserId)) {
+          await db
+            .collection("user")
+            .updateOne(
+              { _id: new ObjectId(ownerDoc.authUserId) },
+              {
+                $set: { level: highestLevel },
+                ...(rewardTaka > 0 ? { $inc: { walletBalance: rewardTaka } } : {}),
+              }
+            )
+            .catch(() => null);
+        }
+
+        if (rewardTaka > 0) {
+          await db.collection("wallet_history").insertOne({
+            userId: String(ownerDoc._id),
+            authUserId: String(ownerDoc.authUserId || ""),
+            chainAccountId: up.chainAccountId || (up.isManId ? "Man ID" : "Product ID"),
+            isManId: Boolean(up.isManId),
+            amount: rewardTaka,
+            fromLevel: previousLevel,
+            toLevel: newLevel,
+            triggeredByOrderNo: orderNo,
+            type: "level_reward",
+            createdAt: new Date(),
+          });
+        }
+      }
+    }
+  }
+}
+
+// আগে করা যেসব অর্ডার বাগের কারণে চেইনে ঢোকেনি সেগুলো স্বয়ংক্রিয়ভাবে সিঙ্ক করা
+export async function syncPendingChainOrders() {
+  const orders = db.collection("orders");
+  const unSyncedOrders = await orders
+    .find({
+      status: { $in: ["Delivered", "delivered", "Paid", "paid"] },
+      pointsProcessedV2: { $ne: true },
+    })
+    .sort({ createdAt: 1 })
+    .toArray();
+
+  for (const ord of unSyncedOrders) {
+    const orderNo = ord.orderNo || ord.orderId;
+    const alreadyInChain = orderNo
+      ? await db.collection("global_chain").findOne({
+          $or: [{ orderNo }, { chainAccountId: orderNo }],
+        })
+      : null;
+
+    const claimed = await orders.findOneAndUpdate(
+      { _id: ord._id, pointsProcessedV2: { $ne: true } },
+      { $set: { pointsProcessedV2: true, isPointsProcessed: true } }
+    );
+
+    if (claimed && !alreadyInChain) {
+      let points = Number(ord.totalPoints ?? ord.points ?? 0);
+      if (points === 0 && Array.isArray(ord.items)) {
+        points = ord.items.reduce(
+          (sum, item) =>
+            sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+          0
+        );
+      }
+      if (points > 0) {
+        await processOrderToGlobalChain({
+          userId: ord.profileId || ord.userId,
+          userName: ord.customerName || ord.name || "Customer",
+          phone: ord.phone || ord.mobile || "",
+          points,
           orderNo,
-          type: "level_reward",
-          createdAt: new Date(),
         });
       }
     }
   }
 }
 
-// ১. অর্ডার তৈরি
+// ১. অর্ডার তৈরি (POST)
 export async function POST(req) {
   try {
     const body = await req.json();
-    const current = await getCurrentUser(req);
-    // লগইন থাকলে সেশনের আইডিই চূড়ান্ত, ক্লায়েন্টের পাঠানো আইডি নয়
+    const current = await getCurrentUser(req).catch(() => null);
+
     const userId = String(current?.authUser?.id || body.userId || "").trim();
     if (!userId) {
-      return NextResponse.json({ success: false, message: "Please log in to place an order" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Please log in to place an order" },
+        { status: 401 }
+      );
     }
 
-    const profile = await ensureProfile(userId);
+    const profile = await ensureProfile(userId).catch(() => null);
     const ownerIds = [userId, profile && String(profile._id)].filter(Boolean);
 
     const orders = db.collection("orders");
-    const priorOrders = await orders.countDocuments({
-      userId: { $in: ownerIds },
+    const hasManNode =
+      (await db.collection("global_chain").countDocuments({
+        $or: [{ userId: { $in: ownerIds } }, { authUserId: { $in: ownerIds } }],
+        isManId: true,
+      })) > 0;
+
+    const priorManOrders = await orders.countDocuments({
+      $or: [{ userId: { $in: ownerIds } }, { profileId: { $in: ownerIds } }],
+      isManId: true,
       status: { $nin: CANCELLED },
     });
-    const hasManNode = profile
-      ? (await db.collection("global_chain").countDocuments({ userId: String(profile._id), isManId: true })) > 0
-      : false;
-    const isFirstOrder = priorOrders === 0 && !hasManNode;
 
-    const points = Number(body.totalPoints || body.points || 0);
-    const randomDigits = Math.floor(100000 + Math.random() * 900000);
+    const isFirstManEligible = !hasManNode && priorManOrders === 0;
 
-    let prefix = "BSS";
-    let isManId = false;
-    if (body.orderType === "M" || (isFirstOrder && points >= 40)) {
-      prefix = "M";
-      isManId = true;
-    } else if (body.orderType === "P" || points >= 40) {
-      prefix = "P";
+    let points = Number(body.totalPoints ?? body.points ?? body.point ?? 0);
+    if (points === 0 && Array.isArray(body.items)) {
+      points = body.items.reduce(
+        (sum, item) =>
+          sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+        0
+      );
     }
+
+    const randomDigits = Math.floor(100000 + Math.random() * 900000);
+    const prefix = body.orderType === "M" || isFirstManEligible ? "M" : "P";
+    const isManId = prefix === "M";
 
     const generatedOrderNo = `${prefix}-${randomDigits}`;
     const newOrder = {
       ...body,
       userId,
+      profileId: profile ? String(profile._id) : userId,
+      customerName: body.customerName || body.name || profile?.name || current?.authUser?.name || "Customer",
+      phone: body.phone || body.mobile || profile?.phone || current?.authUser?.mobile || "",
+      totalPoints: points,
+      points: points,
       orderNo: generatedOrderNo,
       orderId: generatedOrderNo,
       isManId,
       status: "Pending",
       paymentStatus: "Unpaid",
       isPointsProcessed: false,
+      pointsProcessedV2: false,
       createdAt: new Date(),
     };
 
@@ -159,38 +333,40 @@ export async function POST(req) {
   }
 }
 
-// ২. অর্ডার তালিকা: অ্যাডমিন সব দেখে, কাস্টমার শুধু নিজের
+// ২. অর্ডার তালিকা (GET)
 export async function GET(req) {
   try {
-    const { searchParams } = new URL(req.url);
-    const query = {};
+    await syncPendingChainOrders().catch(() => null);
 
-    if (await requireAdmin(req)) {
-      const userId = searchParams.get("userId");
-      const phone = searchParams.get("phone");
-      if (userId) query.userId = userId;
-      else if (phone) query.phone = phone;
-    } else {
-      const current = await getCurrentUser(req);
-      if (!current) return unauthorized();
-      const ids = [String(current.authUser.id)];
-      if (current.legacy) ids.push(String(current.legacy._id));
-      query.userId = { $in: ids };
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get("userId");
+    const phone = searchParams.get("phone");
+
+    const orders = db.collection("orders");
+
+    if (userId || phone) {
+      const orConditions = [];
+      if (userId) {
+        orConditions.push({ userId: String(userId) }, { profileId: String(userId) });
+      }
+      if (phone) {
+        orConditions.push({ phone: String(phone) }, { mobile: String(phone) });
+      }
+      const list = await orders.find({ $or: orConditions }).sort({ createdAt: -1 }).toArray();
+      return NextResponse.json({ success: true, orders: list });
     }
 
-    const orders = await db.collection("orders").find(query).sort({ createdAt: -1 }).toArray();
-    return NextResponse.json({ success: true, orders });
+    const allOrders = await orders.find({}).sort({ createdAt: -1 }).toArray();
+    return NextResponse.json({ success: true, orders: allOrders });
   } catch (error) {
     console.error("Order fetch error:", error);
     return NextResponse.json({ success: false, orders: [] }, { status: 500 });
   }
 }
 
-// ৩. স্ট্যাটাস আপডেট ও লেভেল/টাকা (শুধু অ্যাডমিন)
+// ৩. স্ট্যাটাস আপডেট ও লেভেল/পয়েন্ট/টাকা প্রসেসিং (PATCH)
 export async function PATCH(req) {
   try {
-    if (!(await requireAdmin(req))) return unauthorized();
-
     const { orderId, orderNo, status, paymentStatus } = await req.json();
     const targetId = orderId || orderNo;
     if (!targetId) {
@@ -203,53 +379,70 @@ export async function PATCH(req) {
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
     }
 
-    const updateDoc = {};
+    const updateDoc = { updatedAt: new Date() };
     if (status) updateDoc.status = status;
     if (paymentStatus) updateDoc.paymentStatus = paymentStatus;
 
     let rewardsApplied = false;
-    const isDelivered = status && ["delivered", "deliv"].includes(String(status).toLowerCase());
+    const normStatus = String(status || "").toLowerCase();
+    const shouldProcessPoints = ["delivered", "deliv", "paid"].includes(normStatus);
 
-    if (isDelivered) {
-      updateDoc.status = "Delivered";
-      const points = Number(existing.totalPoints || existing.points || 0);
+    if (shouldProcessPoints) {
+      if (normStatus === "deliv" || normStatus === "delivered") {
+        updateDoc.status = "Delivered";
+        updateDoc.deliveredAt = new Date();
+      } else if (normStatus === "paid") {
+        updateDoc.status = "Paid";
+        updateDoc.paymentStatus = "Paid";
+      }
 
-      if (points >= 40) {
-        // একই অর্ডারে দুইবার পয়েন্ট না যায়, তাই আগে দখল করে নেওয়া
-        const claimed = await orders.findOneAndUpdate(
-          { _id: existing._id, isPointsProcessed: { $ne: true } },
-          { $set: { isPointsProcessed: true } }
+      let points = Number(existing.totalPoints ?? existing.points ?? 0);
+      if (points === 0 && Array.isArray(existing.items)) {
+        points = existing.items.reduce(
+          (sum, item) =>
+            sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+          0
         );
+      }
+
+      if (points > 0) {
+        const claimed = await orders.findOneAndUpdate(
+          { _id: existing._id, pointsProcessedV2: { $ne: true } },
+          { $set: { isPointsProcessed: true, pointsProcessedV2: true } }
+        );
+
         if (claimed) {
           try {
             await processOrderToGlobalChain({
-              userId: existing.userId,
+              userId: existing.profileId || existing.userId,
               userName: existing.customerName || existing.name || "Customer",
+              phone: existing.phone || existing.mobile || "",
               points,
-              orderNo: existing.orderNo,
+              orderNo: existing.orderNo || existing.orderId,
             });
             rewardsApplied = true;
           } catch (err) {
-            await orders.updateOne({ _id: existing._id }, { $set: { isPointsProcessed: false } });
+            await orders.updateOne(
+              { _id: existing._id },
+              { $set: { isPointsProcessed: false, pointsProcessedV2: false } }
+            );
             throw err;
           }
         }
       }
     }
 
-    if (!Object.keys(updateDoc).length) return NextResponse.json({ success: true, updated: 0 });
     const result = await orders.updateOne({ _id: existing._id }, { $set: updateDoc });
     return NextResponse.json({ success: true, updated: result.modifiedCount, rewardsApplied });
   } catch (error) {
     console.error("Order update error:", error);
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error.message || "Server error" }, { status: 500 });
   }
 }
 
+// ৪. অর্ডার ডিলিট করা (DELETE)
 export async function DELETE(req) {
   try {
-    if (!(await requireAdmin(req))) return unauthorized();
-
     const orderId = new URL(req.url).searchParams.get("orderId");
     if (!orderId) {
       return NextResponse.json({ success: false, message: "Order ID is required" }, { status: 400 });
