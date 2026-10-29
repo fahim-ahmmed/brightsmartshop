@@ -103,6 +103,7 @@ export default function ClientDashboardPage() {
     designation: "No Level",
     newPurchasersAfterMe: 0,
     accumulatedPackages: 0,
+    currentStepPackages: 0,
     walletBalance: 0,
     totalOrders: 0,
     reservePoints: 0,
@@ -141,16 +142,20 @@ export default function ClientDashboardPage() {
     { level: 24, required: 16777217, designation: "Crown Customer" },
   ];
 
+  // ১. মেইন আইডির পর মোট কতগুলো প্যাকেজ সেল হয়েছে
   const totalPackagesAfterMe =
     stats.accumulatedPackages !== undefined
       ? stats.accumulatedPackages
       : Math.floor((stats.newPurchasersAfterMe || 0) / 40);
 
-  // প্যাকেজ সংখ্যা অনুযায়ী সঠিক বর্তমান লেভেল ও পরবর্তী টার্গেট নির্ধারণ
+  // ২. নতুন নিয়ম: আগের লেভেলগুলোর প্যাকেজ বাদ দিয়ে ধাপে ধাপে বর্তমান লেভেল ও নতুন টার্গেট হিসাব করা
+  let remainingForStep = totalPackagesAfterMe;
   let calculatedLevel = 0;
   let currentDesignation = "New Member";
+
   for (const row of levelRequirements) {
-    if (totalPackagesAfterMe >= row.required) {
+    if (remainingForStep >= row.required) {
+      remainingForStep -= row.required;
       calculatedLevel = row.level;
       currentDesignation = row.designation;
     } else {
@@ -158,11 +163,15 @@ export default function ClientDashboardPage() {
     }
   }
 
-  const currentLevel = Math.max(Number(stats.currentLevel || 0), calculatedLevel);
+  const currentLevel = calculatedLevel;
+  const currentStepPackages =
+    stats.currentStepPackages !== undefined ? stats.currentStepPackages : remainingForStep;
+
   const nextLevelObj =
     levelRequirements.find((r) => r.level === currentLevel + 1) ||
     levelRequirements[levelRequirements.length - 1];
   const nextLevelTargetPackages = nextLevelObj.required;
+  const packagesNeededForNextLevel = Math.max(0, nextLevelTargetPackages - currentStepPackages);
 
   const reservePoints = Number(stats.reservePoints || 0);
   const pointsNeeded = 40 - (reservePoints % 40);
@@ -208,14 +217,14 @@ export default function ClientDashboardPage() {
     {
       label: "Network Packages",
       value: totalPackagesAfterMe.toString(),
-      subtext: `Target: ${nextLevelTargetPackages} Packages (for Level ${Math.min(24, currentLevel + 1)})`,
+      subtext: `নতুন ধাপে জমা: ${currentStepPackages} / ${nextLevelTargetPackages} (Level ${Math.min(24, currentLevel + 1)} এর জন্য)`,
       icon: "👥",
       bg: "bg-[#F3E8FF] text-purple-900 border-[#E9D5FF]",
     },
     {
       label: currentDesignation,
       value: `Level ${currentLevel < 10 ? `0${currentLevel}` : currentLevel}`,
-      subtext: `${totalPackagesAfterMe} packages in network`,
+      subtext: `পরবর্তী লেভেলের জন্য নতুন আরো ${packagesNeededForNextLevel} টি প্যাকেজ প্রয়োজন`,
       icon: "🏆",
       bg: "bg-[#FFFBE6] text-amber-900 border-[#FFF5C2]",
     },
@@ -330,15 +339,23 @@ export default function ClientDashboardPage() {
                 🎯 NEW PACKAGES TRACKER (YOUR LEVEL {currentLevel})
               </span>
               <span className="text-gray-300">
-                Target: {nextLevelTargetPackages} Packages
+                New Target: {currentStepPackages} / {nextLevelTargetPackages} Packages
               </span>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
-              আপনার মেইন আইডির পর ওয়েবসাইট থেকে নতুন{" "}
+              আপনার মেইন আইডির পর মোট{" "}
               <span className="text-emerald-400 font-black text-sm">
                 {totalPackagesAfterMe} টি
               </span>{" "}
-              প্যাকেজ কেনাকাটা হয়েছে।
+              প্যাকেজ সেল হয়েছে। পরবর্তী লেভেলের (Level {Math.min(24, currentLevel + 1)}) জন্য নতুন{" "}
+              <span className="text-amber-300 font-black">
+                {currentStepPackages}/{nextLevelTargetPackages} টি
+              </span>{" "}
+              পূর্ণ হয়েছে (আর{" "}
+              <span className="text-white font-black underline">
+                {packagesNeededForNextLevel} টি
+              </span>{" "}
+              বাকি)।
             </p>
             <div className="w-full h-3 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
               <div
@@ -346,7 +363,7 @@ export default function ClientDashboardPage() {
                 style={{
                   width: `${Math.min(
                     100,
-                    (totalPackagesAfterMe / (nextLevelTargetPackages || 1)) * 100
+                    (currentStepPackages / (nextLevelTargetPackages || 1)) * 100
                   )}%`,
                 }}
               />
@@ -380,65 +397,7 @@ export default function ClientDashboardPage() {
         </div>
 
         {/* Chain Nodes List */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
-            <div>
-              <span className="text-[10px] font-black text-[#00875A] uppercase tracking-widest block">
-                GLOBAL CHAIN ACCOUNTS (40 PTS = 1 ID)
-              </span>
-              <h3 className="text-lg font-bold text-gray-900">
-                আমার মেইন আইডি ও প্রোডাক্ট আইডি তালিকা ({myChainNodes.length} টি)
-              </h3>
-            </div>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
-              রিজার্ভ জমা: {reservePoints} Pts (আর {pointsNeeded} Pts হলে নতুন আইডি)
-            </span>
-          </div>
-
-          {myChainNodes.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {myChainNodes.map((node, index) => (
-                <div
-                  key={node._id || index}
-                  className={`p-4 rounded-2xl border flex items-center justify-between ${
-                    node.isManId
-                      ? "bg-emerald-50/70 border-emerald-300"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div>
-                    <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
-                        node.isManId
-                          ? "bg-[#00875A] text-white"
-                          : "bg-amber-500 text-white"
-                      }`}
-                    >
-                      {node.isManId ? "Main ID (M)" : "Product ID (P)"}
-                    </span>
-                    <div className="text-base font-black text-gray-900 mt-1.5 font-mono">
-                      {node.chainAccountId}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-extrabold text-[#00875A]">
-                      Level {node.currentLevel || 0}
-                    </div>
-                    <div className="text-[10px] text-gray-500 font-bold">
-                      {node.accumulatedPackages || 0} Pkg
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-6 text-center text-xs text-gray-500 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-              আপনার এখনো ৪০ পয়েন্ট পূর্ণ হয়নি (বর্তমান রিজার্ভ পয়েন্ট:{" "}
-              <strong className="text-[#00875A]">{reservePoints} Pts</strong>)। ৪০ পয়েন্ট পূর্ণ
-              হলেই এখানে আপনার <strong>Main ID / Product ID</strong> দেখা যাবে।
-            </div>
-          )}
-        </div>
+        
 
         {/* Live Inventory Mix & Category Performance Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

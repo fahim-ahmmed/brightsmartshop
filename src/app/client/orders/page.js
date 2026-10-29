@@ -11,26 +11,25 @@ export default function ClientOrdersPage() {
     async function fetchUserOrders() {
       try {
         const savedUser = localStorage.getItem("bright_user");
-        let queryParam = "";
+        const params = new URLSearchParams();
         
         if (savedUser) {
           const parsedUser = JSON.parse(savedUser);
           const userId = parsedUser.id || parsedUser._id;
+          const phone = parsedUser.phone || parsedUser.mobile;
           
-          // প্রথমে আইডি দিয়ে খুঁজবে, আইডি না থাকলে ফোন নাম্বার দিয়ে
-          if (userId) {
-            queryParam = `?userId=${userId}`;
-          } else if (parsedUser.phone) {
-            queryParam = `?phone=${parsedUser.phone}`;
-          }
+          // আইডি এবং ফোন নাম্বার দুইটা থাকলে দুইটাই পাঠানো হবে যাতে কোনো অর্ডার মিস না হয়
+          if (userId) params.set("userId", userId);
+          if (phone) params.set("phone", phone);
         }
 
-        if (!queryParam) {
+        const queryString = params.toString();
+        if (!queryString) {
           setLoading(false);
           return;
         }
 
-        const res = await fetch(`/api/orders${queryParam}`);
+        const res = await fetch(`/api/orders?${queryString}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           setOrders(data.orders || []);
@@ -81,11 +80,15 @@ export default function ClientOrdersPage() {
                 <div>
                   <span className={`px-4 py-1.5 rounded-full font-black text-[11px] uppercase shadow-sm ${
                     ord.status === "Paid" ? "bg-emerald-100 text-emerald-800 border border-emerald-200" :
+                    ord.status === "Confirmed" || ord.status === "Delivered" ? "bg-blue-100 text-blue-800 border border-blue-200" :
                     ord.status === "Cancelled" ? "bg-rose-100 text-rose-800 border border-rose-200" :
-                    ord.status === "Delivered" ? "bg-blue-100 text-blue-800 border border-blue-200" :
                     "bg-amber-100 text-amber-800 border border-amber-200"
                   }`}>
-                    {ord.status || "Pending"}
+                    {ord.status === "Confirmed"
+                      ? "✓ Order Confirmed"
+                      : ord.status === "Paid"
+                      ? "✅ Paid"
+                      : ord.status || "Pending"}
                   </span>
                 </div>
               </div>
@@ -93,8 +96,8 @@ export default function ClientOrdersPage() {
               <div className="space-y-2.5">
                 {(ord.items || []).map((item, i) => (
                   <div key={i} className="flex justify-between items-center text-xs sm:text-sm bg-gray-50/80 p-3 rounded-2xl border border-gray-100 group-hover:bg-emerald-50/30 transition-colors">
-                    <span className="font-bold text-gray-800">{item.title} <span className="text-gray-400 ml-1 font-medium">(x{item.quantity || 1})</span></span>
-                    <span className="font-black text-[#00875A]">৳{item.price * (item.quantity || 1)}</span>
+                    <span className="font-bold text-gray-800">{item.title || item.name} <span className="text-gray-400 ml-1 font-medium">(x{item.quantity || item.qty || 1})</span></span>
+                    <span className="font-black text-[#00875A]">৳{Number(item.price || 0) * Number(item.quantity || item.qty || 1)}</span>
                   </div>
                 ))}
               </div>
@@ -121,7 +124,7 @@ export default function ClientOrdersPage() {
           <div className="text-6xl mb-4">🛍️</div>
           <h2 className="text-lg font-black text-gray-800">আপনি এখনও কোনো অর্ডার করেননি!</h2>
           <p className="text-sm text-gray-500 font-medium">
-            আপনার প্রয়োজনীয় জিনিসপত্র পছন্দ করতে শপ ভিজিট করুন।
+            আপনার প্রয়োজনীয় জিনিসপত্র পছন্দ করতে শপ ভিজিট করুন।
           </p>
           <div className="pt-4">
             <Link href="/shop" className="inline-block bg-[#00875A] text-white font-bold text-sm px-8 py-3 rounded-xl hover:bg-[#00704A] hover:shadow-lg hover:-translate-y-0.5 transition-all">

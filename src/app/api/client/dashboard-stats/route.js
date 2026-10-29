@@ -8,6 +8,31 @@ export const dynamic = "force-dynamic";
 
 const COLORS = ["#3B82F6", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4", "#64748B", "#F97316", "#84CC16"];
 
+// 🟢 ধাপে ধাপে রিসেট হওয়া নতুন লেভেলিং সিস্টেম (আগের লেভেলের প্যাকেজ বাদ দিয়ে নতুন করে গণনা)
+function getStepByStepProgress(totalPackagesAfter) {
+  let remaining = Number(totalPackagesAfter || 0);
+  let level = 0;
+  let earnedTaka = 0;
+
+  for (const c of LEVEL_CONFIG) {
+    if (remaining >= c.requiredPackages) {
+      remaining -= c.requiredPackages;
+      level = c.level;
+      earnedTaka += Number(c.taka || 0);
+    } else {
+      break;
+    }
+  }
+
+  const nextCfg = LEVEL_CONFIG.find((c) => c.level === level + 1) || LEVEL_CONFIG[LEVEL_CONFIG.length - 1];
+  return {
+    level,
+    currentStepPackages: remaining, // আগের লেভেলগুলোর প্যাকেজ বাদ দেওয়ার পর বর্তমান লেভেলের জন্য জমা হওয়া নতুন প্যাকেজ
+    nextLevelTarget: nextCfg ? nextCfg.requiredPackages : 0,
+    earnedTaka,
+  };
+}
+
 // 🟢 গ্লোবাল চেইন থেকে ডুপ্লিকেট মেইন আইডি পরিষ্কার ও লেভেল/ব্যালেন্স পুনরায় নিখুঁতভাবে হিসাব করার ফাংশন (সুপার-ফাস্ট Bulk অপারেশন সহ)
 async function normalizeAndRecalculateChain() {
   // বারবার রিলোডে যাতে স্লো না হয়, তাই ৫ সেকেন্ডের মেমোরি ক্যাশ গার্ড
@@ -39,29 +64,35 @@ async function normalizeAndRecalculateChain() {
       .find({
         $or: [
           { sequenceNo: f.seq },
-          { userId: pid, isManId: true },
-          { userName: f.name, isManId: true },
+          { userId: pid },
+          { userName: f.name },
         ],
       })
       .sort({ sequenceNo: 1 })
       .toArray();
 
-    if (founderNodes.length > 1) {
-      const primaryNode = founderNodes.find((n) => n.sequenceNo === f.seq) || founderNodes[0];
-      // অন্য নোডগুলো ডিলিট না করে প্রোডাক্ট আইডি (P) হিসেবে রাখা যাতে আপনার ৪টি প্যাকেজ আইডিই অক্ষত থাকে
+    // যদি ফাউন্ডার নিজে আসল অর্ডার করে থাকে, তবে তার প্রথম আসল অর্ডারটিই মেইন আইডি হবে (প্লেসহোল্ডারটি নয়)
+    const purchasedNodes = founderNodes.filter((n) => !n.isSystemFounder);
+    const primaryNode =
+      purchasedNodes.length > 0
+        ? purchasedNodes[0]
+        : founderNodes.find((n) => n.sequenceNo === f.seq) || founderNodes[0];
+
+    if (founderNodes.length > 1 && primaryNode) {
       for (const n of founderNodes) {
         if (String(n._id) === String(primaryNode._id)) {
+          const mCode = n.isSystemFounder
+            ? `M-${f.referralCode}`
+            : String(n.chainAccountId || `M-${f.referralCode}`).replace(/^P-/, "M-");
           await chainCol.updateOne(
             { _id: primaryNode._id },
             {
               $set: {
-                sequenceNo: f.seq,
                 userId: pid,
                 userName: f.name,
                 phone: f.phone,
-                chainAccountId: `M-${f.referralCode}`,
+                chainAccountId: mCode,
                 isManId: true,
-                isSystemFounder: true,
               },
             }
           );
@@ -87,6 +118,16 @@ async function normalizeAndRecalculateChain() {
   const allNodes = await chainCol.find({}).sort({ sequenceNo: 1, createdAt: 1 }).toArray();
   const seenManIdForUser = new Set();
   const bulkOps = [];
+  const userBulkOps = [];
+
+  // আগে দেখা হবে কার কার আসল কেনা অর্ডার আছে
+  const usersWithPurchasedNodes = new Set();
+  for (const n of allNodes) {
+    if (!n.isSystemFounder) {
+      const uid = String(n.userId || n.phone || "");
+      if (uid) usersWithPurchasedNodes.add(uid);
+    }
+  }
 
   // 🟢 দ্রুত হিসাব: প্রতিটি নোডের পরের আসল প্যাকেজ সংখ্যা একবারেই বের করা (ফাউন্ডার প্লেসহোল্ডার নোড ০ ধরা হয়)
   const suffix = new Array(allNodes.length + 1).fill(0);
@@ -98,23 +139,18 @@ async function normalizeAndRecalculateChain() {
     const node = allNodes[i];
     const uid = String(node.userId || node.phone || "");
 
-    // একজন ইউজারের শুধুমাত্র প্রথম নোডটিই মেইন আইডি (M) হবে, পরের সব প্রোডাক্ট আইডি (P) হবে
+    // একজন ইউজারের শুধুমাত্র প্রথম কেনা নোডটিই মেইন আইডি (M) হবে, পরের সব প্রোডাক্ট আইডি (P) হবে
     let shouldBeManId = false;
     if (uid && !seenManIdForUser.has(uid)) {
-      seenManIdForUser.add(uid);
-      shouldBeManId = true;
+      if (!node.isSystemFounder || !usersWithPurchasedNodes.has(uid)) {
+        seenManIdForUser.add(uid);
+        shouldBeManId = true;
+      }
     }
 
     const packagesAfter = suffix[i + 1];
-
-    let calcLevel = 0;
-    for (const c of LEVEL_CONFIG) {
-      if (packagesAfter >= c.requiredPackages) {
-        calcLevel = c.level;
-      } else {
-        break;
-      }
-    }
+    const stepProg = getStepByStepProgress(packagesAfter);
+    const calcLevel = stepProg.level;
 
     let fixedAccountId = node.chainAccountId || "";
     if (shouldBeManId && fixedAccountId.startsWith("P-")) {
@@ -147,10 +183,31 @@ async function normalizeAndRecalculateChain() {
       node.accumulatedPackages = packagesAfter;
       node.currentLevel = calcLevel;
     }
+
+    // মেইন আইডির সঠিক লেভেল ও ক্যাশব্যাক টাকা ইউজার প্রোফাইলেও সিঙ্ক রাখা
+    if (shouldBeManId && !node.isSystemFounder && ObjectId.isValid(node.userId)) {
+      userBulkOps.push({
+        updateOne: {
+          filter: { _id: new ObjectId(node.userId) },
+          update: {
+            $set: {
+              level: calcLevel,
+              currentLevel: calcLevel,
+              designation: designationFor(calcLevel),
+              accumulatedPackages: packagesAfter,
+              walletBalance: stepProg.earnedTaka,
+            },
+          },
+        },
+      });
+    }
   }
 
   if (bulkOps.length > 0) {
     await chainCol.bulkWrite(bulkOps, { ordered: false }).catch(() => null);
+  }
+  if (userBulkOps.length > 0) {
+    await usersCol.bulkWrite(userBulkOps, { ordered: false }).catch(() => null);
   }
 }
 
@@ -221,7 +278,6 @@ export async function GET(req) {
     const usersCol = db.collection("users");
     const authCol = db.collection("user");
 
-    // ইউজারের সম্ভাব্য সকল ডুপ্লিকেট প্রোফাইল খুঁজে বের করা (যাতে ২০ টাকা ব্যালেন্স অন্য ডকুমেন্টে থাকলেও মিস না হয়)
     const orQuery = [];
     if (paramUserId) {
       if (ObjectId.isValid(paramUserId)) {
@@ -291,28 +347,52 @@ export async function GET(req) {
       getCategoryGroups(),
     ]);
 
-    const manNode = nodes.find((n) => n.isManId) || nodes[0] || null;
-    const packagesInNetwork = manNode?.accumulatedPackages ?? 0;
-
-    const maxProfileWallet = matchingProfiles.reduce(
-      (max, p) => Math.max(max, Number(p.walletBalance || 0)),
-      Number(legacy?.walletBalance || authUser?.walletBalance || 0)
-    );
-
-    const level = manNode ? manNode.currentLevel || 0 : legacy?.level || 0;
-
-    // 🟢 ওয়ালেট ব্যালেন্স: শুধু প্রোফাইলের আসল ব্যালেন্স (অর্ডার পুরস্কারের সময় যা যোগ হয়)। নোড বা লেভেল থেকে আলাদা করে টাকা হিসাব করা হবে না
-    let walletBalance = maxProfileWallet;
-    if (legacy && (walletBalance !== Number(legacy.walletBalance || 0) || level !== Number(legacy.level || 0))) {
-      await usersCol.updateOne(
-        { _id: legacy._id },
-        { $set: { level, walletBalance, totalPackages: nodes.length } }
-      ).catch(() => null);
-    }
-
-    // 🟢 নিজের অর্ডার করা প্যাকেজ: ফাউন্ডারের আগে থেকে বসানো আইডি গোনা হবে না, শুধু নিজে কেনা প্যাকেজ
+    // 🟢 নিজের অর্ডার করা প্যাকেজ: ফাউন্ডারের আগে থেকে বসানো ডামি আইডি বাদ দিয়ে শুধু নিজের কেনা প্যাকেজ
     const ownedNodes = nodes.filter((n) => !n.isSystemFounder);
     const ownPackages = ownedNodes.length;
+
+    // 🟢 ইউজারের নিজের কেনা প্রথম প্যাকেজটিই তার মেইন আইডি (Man ID)
+    const manNode = ownedNodes.find((n) => n.isManId) || ownedNodes[0] || null;
+
+    // 🟢 শুধুমাত্র এই ইউজারের মেইন আইডি তৈরি হওয়ার পর (sequenceNo > manNode.sequenceNo) ওয়েবসাইটে যতগুলো প্যাকেজ সেল হয়েছে তার সঠিক সংখ্যা
+    let packagesInNetwork = 0;
+    if (manNode) {
+      packagesInNetwork = await db.collection("global_chain").countDocuments({
+        sequenceNo: { $gt: manNode.sequenceNo },
+        isSystemFounder: { $ne: true },
+      });
+    }
+
+    // 🟢 নতুন নিয়ম অনুযায়ী ধাপে ধাপে রিসেট করে বর্তমান লেভেল, বর্তমান ধাপের প্যাকেজ এবং ক্যাশব্যাক টাকা হিসাব করা
+    const stepProgress = getStepByStepProgress(packagesInNetwork);
+    const level = stepProgress.level;
+    const currentStepPackages = stepProgress.currentStepPackages;
+    const nextLevelTarget = stepProgress.nextLevelTarget;
+    const walletBalance = stepProgress.earnedTaka;
+
+    if (
+      legacy &&
+      (walletBalance !== Number(legacy.walletBalance || 0) ||
+        level !== Number(legacy.level || 0) ||
+        packagesInNetwork !== Number(legacy.accumulatedPackages || 0))
+    ) {
+      await usersCol
+        .updateOne(
+          { _id: legacy._id },
+          {
+            $set: {
+              level,
+              currentLevel: level,
+              designation: designationFor(level),
+              walletBalance,
+              accumulatedPackages: packagesInNetwork,
+              totalPackages: ownPackages,
+            },
+          }
+        )
+        .catch(() => null);
+    }
+
     const reservePoints = matchingProfiles.reduce(
       (max, p) => Math.max(max, Number(p.reservePoints || 0)),
       Number(legacy?.reservePoints || 0)
@@ -342,7 +422,6 @@ export async function GET(req) {
       .filter((g) => g._id)
       .map((g, i) => ({ name: String(g._id), count: g.count, color: COLORS[i % COLORS.length] }));
 
-    const next = LEVEL_CONFIG.find((c) => c.level === level + 1);
     const rawEmail = legacy?.email || authUser?.email || "";
     const email = rawEmail.endsWith(".local") ? "" : rawEmail;
 
@@ -362,9 +441,10 @@ export async function GET(req) {
       stats: {
         currentLevel: level,
         designation: designationFor(level),
-        accumulatedPackages: packagesInNetwork,
+        accumulatedPackages: packagesInNetwork, // আপনার মেইন আইডির পর মোট সেল হওয়া প্যাকেজ
+        currentStepPackages: currentStepPackages, // আগের লেভেলগুলোর প্যাকেজ বাদ দিয়ে নতুন লেভেলের জন্য জমা হওয়া প্যাকেজ
         newPurchasersAfterMe: packagesInNetwork * 40,
-        nextLevelTarget: next ? next.requiredPackages : 0,
+        nextLevelTarget: nextLevelTarget,
         walletBalance: walletBalance,
         totalOrders: validOrders.length,
         reservePoints: reservePoints,
@@ -373,17 +453,23 @@ export async function GET(req) {
         totalSponsors: sponsorList.length,
         sponsorsList: sponsorList,
       },
-      // 🟢 তালিকায়ও শুধু নিজের অর্ডার করা আইডি দেখাবে
-      myChainNodes: ownedNodes.map((n) => ({
-        _id: String(n._id),
-        sequenceNo: n.sequenceNo,
-        chainAccountId: n.chainAccountId || (n.isManId ? `M-${n.sequenceNo}` : `P-${n.sequenceNo}`),
-        isManId: Boolean(n.isManId),
-        accumulatedPackages: n.accumulatedPackages || 0,
-        currentLevel: n.currentLevel || 0,
-        designation: designationFor(n.currentLevel || 0),
-        createdAt: n.createdAt,
-      })),
+      // 🟢 তালিকায়ও শুধু নিজের অর্ডার করা আইডি এবং প্রতিটির সঠিক লেভেল দেখাবে
+      myChainNodes: ownedNodes.map((n, idx) => {
+        const isFirstNode = idx === 0;
+        const nodePackagesAfter = isFirstNode ? packagesInNetwork : Number(n.accumulatedPackages || 0);
+        const nodeStep = getStepByStepProgress(nodePackagesAfter);
+        return {
+          _id: String(n._id),
+          sequenceNo: n.sequenceNo,
+          chainAccountId: n.chainAccountId || (isFirstNode ? `M-${n.sequenceNo}` : `P-${n.sequenceNo}`),
+          isManId: isFirstNode,
+          accumulatedPackages: nodePackagesAfter,
+          currentStepPackages: nodeStep.currentStepPackages,
+          currentLevel: nodeStep.level,
+          designation: designationFor(nodeStep.level),
+          createdAt: n.createdAt,
+        };
+      }),
       recentOrders: userOrders.slice(0, 10),
       sponsorList,
       categoryStats,

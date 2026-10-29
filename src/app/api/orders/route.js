@@ -18,6 +18,21 @@ function orderQuery(targetId) {
   };
 }
 
+// 🟢 ধাপে ধাপে রিসেট হওয়া নতুন লেভেলিং সিস্টেম (আগের লেভেলের প্যাকেজ বাদ দিয়ে নতুন করে গণনা)
+function calculateStepByStepLevel(totalPackagesAfter) {
+  let remaining = Number(totalPackagesAfter || 0);
+  let level = 0;
+  for (const c of LEVEL_CONFIG) {
+    if (remaining >= c.requiredPackages) {
+      remaining -= c.requiredPackages;
+      level = c.level;
+    } else {
+      break;
+    }
+  }
+  return level;
+}
+
 // 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং ২৪ লেভেল ক্যালকুলেশন ইঞ্জিন
 export async function processOrderToGlobalChain({ userId, userName, phone, points, orderNo }) {
   const addedPoints = Number(points || 0);
@@ -78,10 +93,21 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
   if (packagesGenerated <= 0) return;
 
   for (let i = 0; i < packagesGenerated; i++) {
-    const existingNodesCount = await chain.countDocuments({
+    const existingPurchasedNodesCount = await chain.countDocuments({
       $or: [{ userId: nodeUserId }, { authUserId: String(profile.authUserId || userId) }],
+      isSystemFounder: { $ne: true },
     });
-    const isManId = existingNodesCount === 0;
+    const isManId = existingPurchasedNodesCount === 0;
+
+    if (isManId) {
+      await chain.updateMany(
+        {
+          $or: [{ userId: nodeUserId }, { authUserId: String(profile.authUserId || userId) }],
+          isSystemFounder: true,
+        },
+        { $set: { isManId: false } }
+      );
+    }
 
     const lastNode = await chain.findOne({}, { sort: { sequenceNo: -1 } });
     const nextSequenceNo = Math.max((lastNode?.sequenceNo || 0) + 1, RESERVED_TOP_POSITIONS + 1);
@@ -121,14 +147,8 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
       const newAccumulated = (up.accumulatedPackages || 0) + 1;
       const previousLevel = up.currentLevel || 0;
 
-      let newLevel = previousLevel;
-      for (const c of LEVEL_CONFIG) {
-        if (newAccumulated >= c.requiredPackages) {
-          newLevel = Math.max(newLevel, c.level);
-        } else {
-          break;
-        }
-      }
+      // 🟢 নতুন নিয়ম: আগের লেভেলের প্যাকেজ বাদ দিয়ে নতুন করে গণনা করে লেভেল নির্ধারণ
+      const newLevel = Math.max(previousLevel, calculateStepByStepLevel(newAccumulated));
 
       let rewardTaka = 0;
       if (newLevel > previousLevel) {
@@ -151,7 +171,6 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
         }
       );
 
-      // প্রোডাক্ট আইডির ক্ষেত্রে ইউজারের লেভেল, ওয়ালেট বা প্রোফাইলে কিছু বদলাবে না
       if (!up.isManId) continue;
 
       // শুধু মেইন আইডির লেভেল ও টাকা ইউজারের মূল ওয়ালেটে যুক্ত করা
@@ -166,7 +185,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
 
       const ownerDoc = await users.findOne(ownerFilter);
       if (ownerDoc) {
-        const highestLevel = Math.max(ownerDoc.level || 0, newLevel);
+        const highestLevel = newLevel;
         const userUpdate = {
           $set: {
             level: highestLevel,
@@ -215,12 +234,12 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
   }
 }
 
-// আগে করা যেসব অর্ডার বাগের কারণে চেইনে ঢোকেনি সেগুলো স্বয়ংক্রিয়ভাবে সিঙ্ক করা
+// শুধু যে অর্ডারগুলো 'Paid' করা হয়েছে কিন্তু চেইনে ঢোকেনি সেগুলো সিঙ্ক করা
 export async function syncPendingChainOrders() {
   const orders = db.collection("orders");
   const unSyncedOrders = await orders
     .find({
-      status: { $in: ["Delivered", "delivered", "Paid", "paid"] },
+      status: { $in: ["Paid", "paid"] },
       pointsProcessedV2: { $ne: true },
     })
     .sort({ createdAt: 1 })
@@ -283,6 +302,7 @@ export async function POST(req) {
       (await db.collection("global_chain").countDocuments({
         $or: [{ userId: { $in: ownerIds } }, { authUserId: { $in: ownerIds } }],
         isManId: true,
+        isSystemFounder: { $ne: true },
       })) > 0;
 
     const priorManOrders = await orders.countDocuments({
@@ -391,16 +411,20 @@ export async function PATCH(req) {
 
     let rewardsApplied = false;
     const normStatus = String(status || "").toLowerCase();
-    const shouldProcessPoints = ["delivered", "deliv", "paid"].includes(normStatus);
+
+    // ১. অ্যাডমিন যখন 'Confirm' বাটনে ক্লিক করবে, তখন অর্ডার শুধু Confirmed হবে (লেভেলিং শুরু হবে না)
+    if (normStatus === "confirm" || normStatus === "confirmed") {
+      updateDoc.status = "Confirmed";
+      updateDoc.confirmedAt = new Date();
+    }
+
+    // ২. অ্যাডমিন যখন 'Paid' বাটনে ক্লিক করবে, তখন স্ট্যাটাস Paid হবে এবং লেভেলিং সিস্টেম শুরু হবে
+    const shouldProcessPoints = normStatus === "paid";
 
     if (shouldProcessPoints) {
-      if (normStatus === "deliv" || normStatus === "delivered") {
-        updateDoc.status = "Delivered";
-        updateDoc.deliveredAt = new Date();
-      } else if (normStatus === "paid") {
-        updateDoc.status = "Paid";
-        updateDoc.paymentStatus = "Paid";
-      }
+      updateDoc.status = "Paid";
+      updateDoc.paymentStatus = "Paid";
+      updateDoc.paidAt = new Date();
 
       let points = Number(existing.totalPoints ?? existing.points ?? 0);
       if (points === 0 && Array.isArray(existing.items)) {
