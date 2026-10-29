@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { db } from "@/lib/mongo-client";
-import { ensureProfile, getCurrentUser, syncMissingProfiles } from "@/lib/current-user";
+import { ensureProfile, getCurrentUser, syncMissingProfiles, requireAdmin } from "@/lib/current-user";
 import { LEVEL_CONFIG, RESERVED_TOP_POSITIONS, designationFor } from "@/lib/level-config";
+import { getStepByStepProgress } from "@/lib/level-progress";
 
 export const dynamic = "force-dynamic";
 
@@ -18,33 +19,16 @@ function orderQuery(targetId) {
   };
 }
 
-// 🟢 ধাপে ধাপে রিসেট হওয়া নতুন লেভেলিং সিস্টেম (আগের লেভেলের প্যাকেজ বাদ দিয়ে নতুন করে গণনা)
-function calculateStepByStepLevel(totalPackagesAfter) {
-  let remaining = Number(totalPackagesAfter || 0);
-  let level = 0;
-  for (const c of LEVEL_CONFIG) {
-    if (remaining >= c.requiredPackages) {
-      remaining -= c.requiredPackages;
-      level = c.level;
-    } else {
-      break;
-    }
-  }
-  return level;
-}
-
-// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং ২৪ লেভেল ক্যালকুলেশন ইঞ্জিন
+// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং লেভেল ক্যালকুলেশন ইঞ্জিন
 export async function processOrderToGlobalChain({ userId, userName, phone, points, orderNo }) {
   const addedPoints = Number(points || 0);
   if (addedPoints <= 0) return;
 
-  // টপ ১০টি আইডি এবং সব প্রোফাইল সিঙ্ক থাকা নিশ্চিত করা
   await syncMissingProfiles();
 
   const chain = db.collection("global_chain");
   const users = db.collection("users");
 
-  // ইউজারের প্রোফাইল খুঁজে বের করা
   let profile = await ensureProfile(userId);
   if (!profile && phone) {
     profile = await users.findOne({ $or: [{ phone }, { mobile: phone }] });
@@ -75,6 +59,13 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
   }
 
   const nodeUserId = String(profile._id);
+
+  // 🟢 একই অর্ডার আগেই চেইনে ঢুকে থাকলে আর কিছু করা হবে না (ডুপ্লিকেট নোড ঠেকাতে)
+  if (orderNo) {
+    const already = await chain.countDocuments({ orderNo });
+    if (already > 0) return;
+  }
+
   const previousReserve = Number(profile.reservePoints || 0);
   const totalAvailablePoints = previousReserve + addedPoints;
 
@@ -96,6 +87,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
     const existingPurchasedNodesCount = await chain.countDocuments({
       $or: [{ userId: nodeUserId }, { authUserId: String(profile.authUserId || userId) }],
       isSystemFounder: { $ne: true },
+      $and: [{ $or: [{ orderNo: { $exists: true, $nin: [null, ""] } }, { chainAccountId: { $exists: true, $nin: [null, ""] } }] }],
     });
     const isManId = existingPurchasedNodesCount === 0;
 
@@ -125,6 +117,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
       sequenceNo: nextSequenceNo,
       chainAccountId,
       orderNo,
+      orderSeq: i,
       userId: nodeUserId,
       authUserId: String(profile.authUserId || userId),
       userName: profile.name || userName || "Customer",
@@ -140,15 +133,14 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
 
     await users.updateOne({ _id: profile._id }, { $inc: { totalPackages: 1 } });
 
-    // 🟢 উপরের সকল নোডকে (Top 10 + সকল Man ID + সকল Product ID) হিট করা
+    // 🟢 উপরের সকল নোডকে হিট করা
     const upperNodes = await chain.find({ sequenceNo: { $lt: nextSequenceNo } }).toArray();
 
     for (const up of upperNodes) {
       const newAccumulated = (up.accumulatedPackages || 0) + 1;
       const previousLevel = up.currentLevel || 0;
 
-      // 🟢 নতুন নিয়ম: আগের লেভেলের প্যাকেজ বাদ দিয়ে নতুন করে গণনা করে লেভেল নির্ধারণ
-      const newLevel = Math.max(previousLevel, calculateStepByStepLevel(newAccumulated));
+      const newLevel = Math.max(previousLevel, getStepByStepProgress(newAccumulated).level);
 
       let rewardTaka = 0;
       if (newLevel > previousLevel) {
@@ -158,7 +150,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
         }
       }
 
-      // 🟢 প্রোডাক্ট আইডির টাকা শুধু ওই প্রোডাক্ট আইডিতেই জমা থাকবে (ব্যাকএন্ডে), ইউজারের ওয়ালেটে যাবে না
+      // প্রোডাক্ট আইডির টাকা শুধু ওই আইডিতেই জমা থাকবে, ইউজারের ওয়ালেটে যাবে না
       await chain.updateOne(
         { _id: up._id },
         {
@@ -173,7 +165,6 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
 
       if (!up.isManId) continue;
 
-      // শুধু মেইন আইডির লেভেল ও টাকা ইউজারের মূল ওয়ালেটে যুক্ত করা
       const ownerFilter = {
         $or: [
           ...(ObjectId.isValid(up.userId) ? [{ _id: new ObjectId(up.userId) }] : []),
@@ -234,7 +225,7 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
   }
 }
 
-// শুধু যে অর্ডারগুলো 'Paid' করা হয়েছে কিন্তু চেইনে ঢোকেনি সেগুলো সিঙ্ক করা
+// 'Paid' করা কিন্তু চেইনে না ঢোকা অর্ডারগুলো সিঙ্ক করা
 export async function syncPendingChainOrders() {
   const orders = db.collection("orders");
   const unSyncedOrders = await orders
@@ -360,24 +351,34 @@ export async function POST(req) {
 }
 
 // ২. অর্ডার তালিকা (GET)
+// অ্যাডমিন: সব অর্ডার (চাইলে userId/phone দিয়ে ফিল্টার)। সাধারণ ইউজার: শুধু নিজের অর্ডার।
 export async function GET(req) {
   try {
+    const admin = await requireAdmin(req);
+    const current = admin ? null : await getCurrentUser(req).catch(() => null);
+    if (!admin && !current?.authUser) {
+      return NextResponse.json({ success: false, orders: [], message: "Unauthorized" }, { status: 401 });
+    }
+
     await syncPendingChainOrders().catch(() => null);
+    const orders = db.collection("orders");
+
+    if (!admin) {
+      const ids = [String(current.authUser.id), current.legacy && String(current.legacy._id)].filter(Boolean);
+      const or = [{ userId: { $in: ids } }, { profileId: { $in: ids } }];
+      const ph = current.legacy?.phone || current.authUser?.mobile;
+      if (ph) or.push({ phone: String(ph) }, { mobile: String(ph) });
+      const list = await orders.find({ $or: or }).sort({ createdAt: -1 }).toArray();
+      return NextResponse.json({ success: true, orders: list });
+    }
 
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
     const phone = searchParams.get("phone");
-
-    const orders = db.collection("orders");
-
     if (userId || phone) {
       const orConditions = [];
-      if (userId) {
-        orConditions.push({ userId: String(userId) }, { profileId: String(userId) });
-      }
-      if (phone) {
-        orConditions.push({ phone: String(phone) }, { mobile: String(phone) });
-      }
+      if (userId) orConditions.push({ userId: String(userId) }, { profileId: String(userId) });
+      if (phone) orConditions.push({ phone: String(phone) }, { mobile: String(phone) });
       const list = await orders.find({ $or: orConditions }).sort({ createdAt: -1 }).toArray();
       return NextResponse.json({ success: true, orders: list });
     }
@@ -393,6 +394,9 @@ export async function GET(req) {
 // ৩. স্ট্যাটাস আপডেট ও লেভেল/পয়েন্ট/টাকা প্রসেসিং (PATCH)
 export async function PATCH(req) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
     const { orderId, orderNo, status, paymentStatus } = await req.json();
     const targetId = orderId || orderNo;
     if (!targetId) {
@@ -405,6 +409,16 @@ export async function PATCH(req) {
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
     }
 
+    // 🟢 প্যাকেজ চেইনে ঢুকে যাওয়া অর্ডার Cancel/Pending করলে চেইনে ভুতুড়ে নোড থেকে যায়
+    // ("নিজের অর্ডার ০ কিন্তু প্যাকেজ ১" সমস্যা), তাই আটকে দেওয়া হলো
+    const wanted = String(status || "").toLowerCase();
+    if ((existing.pointsProcessedV2 || existing.isPointsProcessed) && ["cancelled", "canceled", "pending"].includes(wanted)) {
+      return NextResponse.json(
+        { success: false, message: "এই অর্ডারের প্যাকেজ চেইনে ঢুকে গেছে, তাই Cancel/Pending করা যাবে না।" },
+        { status: 409 }
+      );
+    }
+
     const updateDoc = { updatedAt: new Date() };
     if (status) updateDoc.status = status;
     if (paymentStatus) updateDoc.paymentStatus = paymentStatus;
@@ -412,13 +426,11 @@ export async function PATCH(req) {
     let rewardsApplied = false;
     const normStatus = String(status || "").toLowerCase();
 
-    // ১. অ্যাডমিন যখন 'Confirm' বাটনে ক্লিক করবে, তখন অর্ডার শুধু Confirmed হবে (লেভেলিং শুরু হবে না)
     if (normStatus === "confirm" || normStatus === "confirmed") {
       updateDoc.status = "Confirmed";
       updateDoc.confirmedAt = new Date();
     }
 
-    // ২. অ্যাডমিন যখন 'Paid' বাটনে ক্লিক করবে, তখন স্ট্যাটাস Paid হবে এবং লেভেলিং সিস্টেম শুরু হবে
     const shouldProcessPoints = normStatus === "paid";
 
     if (shouldProcessPoints) {
@@ -473,14 +485,35 @@ export async function PATCH(req) {
 // ৪. অর্ডার ডিলিট করা (DELETE)
 export async function DELETE(req) {
   try {
+    if (!(await requireAdmin(req))) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
     const orderId = new URL(req.url).searchParams.get("orderId");
     if (!orderId) {
       return NextResponse.json({ success: false, message: "Order ID is required" }, { status: 400 });
     }
-    const result = await db.collection("orders").deleteOne(orderQuery(orderId));
-    if (result.deletedCount === 0) {
+
+    const orders = db.collection("orders");
+    const existing = await orders.findOne(orderQuery(orderId));
+    if (!existing) {
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
     }
+
+    // 🟢 যে অর্ডারের প্যাকেজ চেইনে ঢুকে গেছে সেটা মুছলে চেইনে ভুতুড়ে নোড থেকে যায়
+    // ("নিজের অর্ডার ০ কিন্তু প্যাকেজ ১" সমস্যার কারণ), তাই মুছতে দেওয়া হবে না
+    const orderNo = existing.orderNo || existing.orderId;
+    const inChain = orderNo ? await db.collection("global_chain").countDocuments({ orderNo }) : 0;
+    if (existing.pointsProcessedV2 || inChain > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "এই অর্ডারের প্যাকেজ চেইনে ঢুকে গেছে, তাই মোছা যাবে না।",
+        },
+        { status: 409 }
+      );
+    }
+
+    await orders.deleteOne({ _id: existing._id });
     return NextResponse.json({ success: true, message: "Order deleted successfully" });
   } catch (error) {
     console.error("Order delete error:", error);
