@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongo-client";
 
-export async function GET(req) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const forcePreview = searchParams.get("preview") === "true"; // ১-২০ তারিখের মধ্যেও চেক করার অপশন
-
     const client = await clientPromise;
     const db = client.db();
 
@@ -14,12 +11,9 @@ export async function GET(req) {
     const currentMonth = now.getMonth(); // 0 = Jan, 9 = Oct
     const currentDay = now.getDate();
 
-    // চলতি মাসের ১ তারিখ (০০:০০:০০) থেকে ২০ তারিখ (২৩:৫৯:৫৯) পর্যন্ত সময়সীমা
+    // চলতি মাসের ১ তারিখ (০০:০০:০০) থেকে মাসের শেষ দিন পর্যন্ত সময়সীমা
     const startDate = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
-    const endDate = new Date(currentYear, currentMonth, 20, 23, 59, 59, 999);
-
-    // ২১ তারিখ হয়েছে কিনা চেক করা
-    const isAfter20th = currentDay >= 21;
+    const endDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
 
     // ১. ডাটাবেস থেকে সব রেজিস্টার্ড ইউজার আনা (অ্যাডমিন বাদে)
     const allUsers = await db
@@ -28,50 +22,68 @@ export async function GET(req) {
       .sort({ createdAt: -1 })
       .toArray();
 
-    // ২. চলতি মাসের ১ থেকে ২০ তারিখের মধ্যে করা সব বৈধ অর্ডার (Cancelled বাদে) আনা
-    const validOrders = await db
+    // ২. চলতি মাসের ১ তারিখ থেকে করা সব বৈধ অর্ডার (Cancelled বাদে) আনা
+    const allOrders = await db
       .collection("orders")
       .find({
-        createdAt: { $gte: startDate,$lte: endDate },
         status: { $nin: ["Cancelled", "cancelled", "CANCELLED"] },
       })
       .toArray();
 
-    // ৩. কোন ইউজার ১-২০ তারিখের মধ্যে মোট কত পয়েন্টের অর্ডার করেছে তা হিসাব করা
+    const validOrders = allOrders.filter((ord) => {
+      if (!ord.createdAt) return false;
+      const ordDate = new Date(ord.createdAt);
+      return ordDate >= startDate && ordDate <= endDate;
+    });
+
+    // ৩. কোন ইউজার চলতি মাসে মোট কত পয়েন্টের অর্ডার করেছে তা হিসাব করা
     const userPointsMap = {};
 
     validOrders.forEach((ord) => {
-      const points = Number(ord.totalPoints ?? ord.points ?? 0);
+      let points = Number(ord.totalPoints ?? ord.points ?? 0);
+      if (points === 0 && Array.isArray(ord.items)) {
+        points = ord.items.reduce(
+          (sum, item) =>
+            sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+          0
+        );
+      }
+
       const uId = ord.userId ? String(ord.userId).trim() : null;
-      const uPhone = ord.phone ? String(ord.phone).trim() : null;
+      const pId = ord.profileId ? String(ord.profileId).trim() : null;
+      const uPhone = (ord.phone || ord.mobile) ? String(ord.phone || ord.mobile).trim() : null;
       const uEmail = ord.email ? String(ord.email).trim().toLowerCase() : null;
+      const uName = ord.customerName ? String(ord.customerName).trim().toLowerCase() : null;
 
       if (uId) userPointsMap[`id_${uId}`] = (userPointsMap[`id_${uId}`] || 0) + points;
+      if (pId && pId !== uId) userPointsMap[`id_${pId}`] = (userPointsMap[`id_${pId}`] || 0) + points;
       if (uPhone) userPointsMap[`phone_${uPhone}`] = (userPointsMap[`phone_${uPhone}`] || 0) + points;
       if (uEmail) userPointsMap[`email_${uEmail}`] = (userPointsMap[`email_${uEmail}`] || 0) + points;
+      if (uName) userPointsMap[`name_${uName}`] = (userPointsMap[`name_${uName}`] || 0) + points;
     });
 
-    // ৪. যেসব ইউজার ১-২০ তারিখের মধ্যে ৪০ পয়েন্ট (১ প্যাকেজ) পূর্ণ করেনি তাদের ফিল্টার করা
+    // ৪. মাসের ১ তারিখ থেকেই সবাই এই লিস্টে থাকবে, আর যারা ৪০ পয়েন্ট (১ প্যাকেজ) অর্ডার করে ফেলবে তারা অটোমেটিক বাদ হয়ে যাবে
     const unorderedList = allUsers
       .map((user) => {
         const uid = String(user._id).trim();
-        const phone = user.phone ? String(user.phone).trim() : "";
+        const phone = (user.phone || user.mobile) ? String(user.phone || user.mobile).trim() : "";
         const email = user.email ? String(user.email).trim().toLowerCase() : "";
+        const nameKey = user.name ? String(user.name).trim().toLowerCase() : "";
 
-        // ইউজার আইডি, ফোন বা ইমেইল যেকোনো একটি দিয়ে ম্যাচ করলেই পয়েন্ট ধরা হবে
         const earnedPoints = Math.max(
           userPointsMap[`id_${uid}`] || 0,
-                    user.authUserId ? userPointsMap[`id_${String(user.authUserId)}`] || 0 : 0,
+          user.authUserId ? userPointsMap[`id_${String(user.authUserId).trim()}`] || 0 : 0,
           phone ? userPointsMap[`phone_${phone}`] || 0 : 0,
-          email ? userPointsMap[`email_${email}`] || 0 : 0
+          email ? userPointsMap[`email_${email}`] || 0 : 0,
+          nameKey ? userPointsMap[`name_${nameKey}`] || 0 : 0
         );
 
         return {
           _id: uid,
           name: user.name || user.fullName || user.username || "N/A",
           phone: user.phone || user.mobile || "N/A",
-          email: user.email || "N/A",
-          address: user.address || user.location || "ঠিকানা দেওয়া হয়নি",
+          email: user.email && !user.email.endsWith("@brightsmartshop.local") ? user.email : "N/A",
+          address: user.address || user.location || "ঠিকানা দেওয়া হয়নি",
           referralId: user.referralCode || user.sponsorId || user.referredBy || "N/A",
           level: user.level || 0,
           walletBalance: user.walletBalance || 0,
@@ -80,17 +92,16 @@ export async function GET(req) {
           createdAt: user.createdAt || null,
         };
       })
-      .filter((u) => u.earnedPointsThisPeriod < 40); // ৪০ পয়েন্টের কম হলেই ডিফল্টার
+      .filter((u) => u.earnedPointsThisPeriod < 40);
 
     return NextResponse.json({
       success: true,
-      isAfter20th,
+      isAfter20th: true,
       currentDay,
       currentMonthName: now.toLocaleString("en-US", { month: "long", year: "numeric" }),
       totalRegisteredUsers: allUsers.length,
       totalDefaulters: unorderedList.length,
-      // ২১ তারিখ থেকে স্বয়ংক্রিয়ভাবে সবাইকে দেখাবে, আর ১-২০ তারিখে অ্যাডমিন চাইলে প্রিভিউ দেখতে পারবে
-      users: isAfter20th || forcePreview ? unorderedList : [],
+      users: unorderedList,
     });
   } catch (error) {
     console.error("Unordered users fetch error:", error);

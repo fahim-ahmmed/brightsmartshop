@@ -3,11 +3,449 @@
 import React, { useState, useEffect } from "react";
 import toast, { Toaster } from "react-hot-toast";
 
+// 🟢 অ্যাডমিনের জন্য হুবহু স্যাম্পল পিডিএফ-এর মতো ইনভয়েস জেনারেটর ফাংশন (পার অর্ডার ক্যালকুলেশন সহ)
+function openOrderInvoicePDF(ord) {
+  if (typeof window === "undefined") return;
+
+  const rawOrderId = String(ord.orderId || ord.orderNo || ord._id || "74");
+  const cleanDigits = rawOrderId.replace(/\D/g, "") || "74";
+  const invoiceNo = ord.invoiceNo || `GTI-2026-${cleanDigits.padStart(6, "0")}`;
+  const displayOrderId = ord.orderNo || ord.orderId || `#${cleanDigits}`;
+
+  const d = ord.createdAt ? new Date(ord.createdAt) : new Date();
+  const formattedDate = d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const formattedTime = d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const dateStr = `${formattedDate}, ${formattedTime}`;
+
+  const customerName = ord.customerName || ord.shipping?.name || "Customer";
+  const customerId = ord.customerId || ord.referralCode || ord.userId || "20260048";
+
+  const rawEmail = ord.email || "";
+  const customerEmail = rawEmail && !rawEmail.endsWith(".local") ? rawEmail : "";
+  const customerPhone = ord.phone || ord.mobile || ord.shipping?.mobile || "N/A";
+  const customerAddress = ord.address || ord.shipping?.address || "N/A";
+
+  const isOffice = ord.paymentMethod === "office_receive";
+  const deliveryType = isOffice ? "Office Pickup" : "Home Delivery";
+
+  const payMethodRaw = String(ord.paymentMethod || "cod").toLowerCase();
+  const paymentMethodLabel =
+    payMethodRaw === "cod"
+      ? "Cod"
+      : payMethodRaw === "bkash"
+      ? "bKash"
+      : payMethodRaw === "nagad"
+      ? "Nagad"
+      : payMethodRaw === "office_receive"
+      ? "Office Receive"
+      : ord.paymentMethod || "Cod";
+
+  const isPaid =
+    String(ord.status || "").toLowerCase() === "paid" ||
+    String(ord.paymentStatus || "").toLowerCase() === "paid";
+  const paymentBadgeText = isPaid ? "Paid" : "Unpaid";
+  const orderStatusText = ord.status || "Confirmed";
+
+  const items = Array.isArray(ord.items) ? ord.items : [];
+  let calculatedSubtotal = 0;
+  let calculatedPoints = 0;
+
+  const rowsHtml = items
+    .map((item, idx) => {
+      const title = item.title || item.name || item.productName || "Product";
+      const prodId = item.productId || (item.id && String(item.id).slice(-4)) || idx + 1;
+      const sku = item.sku || item.code || `BSS-ITEM-00${idx + 1}`;
+      const qty = Number(item.quantity || item.qty || 1);
+      const unitPrice = Number(item.price || (item.pricePaisa ? item.pricePaisa / 100 : 0));
+      const lineTotal = unitPrice * qty;
+      const itemPts = Number(item.points || item.point || 0) * qty;
+
+      calculatedSubtotal += lineTotal;
+      calculatedPoints += itemPts;
+
+      return `
+        <tr>
+          <td class="td-product">${title}</td>
+          <td class="td-center">${prodId}</td>
+          <td class="td-center">${sku}</td>
+          <td class="td-center">${qty}</td>
+          <td class="td-right">৳${unitPrice.toFixed(2)}</td>
+          <td class="td-right td-bold">৳${lineTotal.toFixed(2)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const subtotal = Number(ord.subtotalPrice || calculatedSubtotal || ord.totalAmount || 0);
+  const discount = Number(ord.discount || 0);
+  const totalPoints = Number(ord.totalPoints ?? ord.points ?? calculatedPoints ?? 0);
+  const deliveryCharge =
+    ord.deliveryCharge !== undefined
+      ? Number(ord.deliveryCharge)
+      : isOffice || totalPoints >= 200
+      ? 0
+      : Math.max(0, Number(ord.totalAmount || subtotal) - subtotal);
+  const grandTotal = Number(ord.totalAmount || subtotal - discount + deliveryCharge);
+
+  const logoUrl = `${window.location.origin}/logo.jpg`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin dashboard | Bright Smart Shop - ${invoiceNo}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      padding: 24px;
+    }
+    .toolbar {
+      max-width: 820px;
+      margin: 0 auto 16px auto;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-print { background: #15803d; color: #ffffff; }
+    .btn-close { background: #e2e8f0; color: #1e293b; }
+    .invoice-card {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 36px 40px;
+    }
+    .top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 22px;
+      border-bottom: 2px solid #15803d;
+    }
+    .company-box {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .company-logo {
+      width: 68px;
+      height: 68px;
+      object-fit: contain;
+    }
+    .company-name {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .company-meta {
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.5;
+    }
+    .invoice-meta {
+      text-align: right;
+    }
+    .invoice-badge {
+      display: inline-block;
+      background: #15803d;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 5px 14px;
+      border-radius: 4px;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+    .invoice-no {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .invoice-sub {
+      font-size: 12.5px;
+      color: #475569;
+      line-height: 1.55;
+    }
+    .paid-pill {
+      display: inline-block;
+      margin-top: 5px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: ${isPaid ? "#dcfce7" : "#fef3c7"};
+      color: ${isPaid ? "#15803d" : "#b45309"};
+      border: 1px solid ${isPaid ? "#bbf7d0" : "#fde68a"};
+    }
+    .address-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin: 22px 0;
+    }
+    .addr-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+    .addr-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #15803d;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+    .addr-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .addr-line {
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.5;
+    }
+    table.items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    table.items-table thead tr {
+      background: #0f172a;
+      color: #ffffff;
+    }
+    table.items-table th {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 11px 12px;
+      text-align: left;
+    }
+    table.items-table th.th-center { text-align: center; }
+    table.items-table th.th-right { text-align: right; }
+    table.items-table tbody tr {
+      border-bottom: 1px solid #e2e8f0;
+    }
+    table.items-table td {
+      font-size: 13px;
+      padding: 12px;
+      color: #1e293b;
+    }
+    .td-product { font-weight: 600; }
+    .td-center { text-align: center; }
+    .td-right { text-align: right; }
+    .td-bold { font-weight: 700; }
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 24px;
+      margin-top: 24px;
+      align-items: flex-start;
+    }
+    .notes-area {
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.65;
+    }
+    .notes-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .totals-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .totals-table td {
+      padding: 6px 0;
+      font-size: 13.5px;
+      color: #334155;
+    }
+    .totals-table td.val {
+      text-align: right;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .totals-table tr.grand-row td {
+      border-top: 2px solid #0f172a;
+      padding-top: 10px;
+      padding-bottom: 8px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .totals-table tr.points-row td {
+      font-size: 13px;
+      font-weight: 700;
+      color: #15803d;
+      padding-top: 4px;
+    }
+    .footer-bar {
+      margin-top: 32px;
+      padding-top: 14px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+    }
+    @media print {
+      body { background: #ffffff; padding: 0; }
+      .toolbar { display: none !important; }
+      .invoice-card { border: 1px solid #cbd5e1; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn btn-print" onclick="window.print()">🖨️ Print / Save PDF</button>
+    <button class="btn btn-close" onclick="window.close()">✕ Close</button>
+  </div>
+
+  <div class="invoice-card">
+    <div class="top-row">
+      <div class="company-box">
+        <img src="${logoUrl}" alt="Bright Smart Shop" class="company-logo" onerror="this.style.display='none'" />
+        <div>
+          <div class="company-name">Bright Smart Shop</div>
+          <div class="company-meta">
+            <div>Phone: +8801727629513</div>
+            <div>Email: brightsmartshop24@gmail.com</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="invoice-meta">
+        <div class="invoice-badge">INVOICE</div>
+        <div class="invoice-no">${invoiceNo}</div>
+        <div class="invoice-sub">
+          <div>Date: ${dateStr}</div>
+          <div>Order ID: ${displayOrderId}</div>
+        </div>
+        <div class="paid-pill">Payment: ${paymentBadgeText}</div>
+      </div>
+    </div>
+
+    <div class="address-grid">
+      <div class="addr-box">
+        <div class="addr-label">BILL TO</div>
+        <div class="addr-name">${customerName}</div>
+        <div class="addr-line">Customer ID: ${customerId}</div>
+        ${customerEmail ? `<div class="addr-line">${customerEmail}</div>` : ""}
+        <div class="addr-line">Phone: ${customerPhone}</div>
+      </div>
+
+      <div class="addr-box">
+        <div class="addr-label">SHIP TO</div>
+        <div class="addr-name">${customerName}</div>
+        <div class="addr-line">${customerAddress}</div>
+        <div class="addr-line">Delivery: ${deliveryType}</div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="th-center">Product ID</th>
+          <th class="th-center">SKU</th>
+          <th class="th-center">Qty</th>
+          <th class="th-right">Unit price</th>
+          <th class="th-right">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+
+    <div class="bottom-grid">
+      <div class="notes-area">
+        <div class="notes-title">Thank you for your order!</div>
+        <div>This invoice is generated from your order details.</div>
+        <div style="margin-top: 6px;">Order status: <strong>${orderStatusText}</strong></div>
+        <div>Payment method: <strong>${paymentMethodLabel}</strong></div>
+      </div>
+
+      <div>
+        <table class="totals-table">
+          <tr>
+            <td>Subtotal</td>
+            <td class="val">৳${subtotal.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td>Discount</td>
+            <td class="val">- ৳০.০০</td>
+          </tr>
+          <tr>
+            <td>Delivery charge</td>
+            <td class="val">৳${deliveryCharge.toFixed(2)}</td>
+          </tr>
+          <tr class="grand-row">
+            <td>Grand total</td>
+            <td class="val">৳${grandTotal.toFixed(2)}</td>
+          </tr>
+          <tr class="points-row">
+            <td>Points earned</td>
+            <td class="val" style="color:#15803d;">${totalPoints.toFixed(2)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer-bar">
+      <span>Bright Smart Shop</span>
+      <span>Invoice: ${invoiceNo}</span>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function () {
+      setTimeout(function () {
+        window.print();
+      }, 300);
+    };
+  </script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  }
+}
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 🟢 সঠিক API রুট (/api/orders) থেকে ডাটা ফেচ করা
   const fetchAllOrders = async () => {
     setLoading(true);
     try {
@@ -28,7 +466,6 @@ export default function AdminOrdersPage() {
     fetchAllOrders();
   }, []);
 
-  // স্ট্যাটাস আপডেট করার ফাংশন
   const handleUpdateStatus = async (orderId, newStatus) => {
     const loadingToastId = toast.loading(`অর্ডারটি '${newStatus}' করা হচ্ছে...`);
 
@@ -50,7 +487,6 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // 🟢 অর্ডার ডিলিট করার ফাংশন
   const handleDeleteOrder = async (orderId) => {
     if (!confirm("আপনি কি নিশ্চিত এই অর্ডারটি চিরতরে ডিলিট করতে চান?")) return;
 
@@ -72,7 +508,6 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // ফিল্টারিং: শুধু 'M' এবং 'P' আলাদা করা
   const manIdOrders = [];
   const productIdOrders = [];
 
@@ -121,7 +556,7 @@ export default function AdminOrdersPage() {
           </p>
         </div>
 
-        {/* 🟢 কাস্টমার কী কী পণ্য বা প্যাকেজ অর্ডার করেছে তার বিস্তারিত তালিকা */}
+        {/* কাস্টমার কী কী পণ্য বা প্যাকেজ অর্ডার করেছে তার বিস্তারিত তালিকা */}
         <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-lg p-2 space-y-1.5">
           <span className="text-[10px] font-black text-[#00875A] uppercase block border-b border-emerald-200/60 pb-1">
             🛒 অর্ডারকৃত মালামাল ({items.length} টি আইটেম):
@@ -193,12 +628,23 @@ export default function AdminOrdersPage() {
             </button>
           </div>
 
-          <button
-            onClick={() => handleDeleteOrder(currentOrderId)}
-            className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-[10px] uppercase rounded transition-all cursor-pointer flex items-center justify-center gap-1 shadow-xs"
-          >
-            🗑️ অর্ডার ডিলিট করুন
-          </button>
+          {/* 🟢 পার অর্ডার পিডিএফ ইনভয়েস ও ডিলিট বাটন */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => openOrderInvoicePDF(ord)}
+              className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-black text-[10px] uppercase rounded transition-all cursor-pointer flex items-center justify-center gap-1 shadow-xs"
+            >
+              📄 ইনভয়েস (PDF)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteOrder(currentOrderId)}
+              className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-[10px] uppercase rounded transition-all cursor-pointer flex items-center justify-center gap-1 shadow-xs"
+            >
+              🗑️ ডিলিট
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -266,6 +712,13 @@ export default function AdminOrdersPage() {
                 className="px-2 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 font-bold text-[10px] rounded transition-all cursor-pointer"
               >
                 Paid
+              </button>
+              <button
+                onClick={() => openOrderInvoicePDF(ord)}
+                title="Download Invoice PDF"
+                className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] rounded transition-all cursor-pointer"
+              >
+                📄 PDF
               </button>
               <button
                 onClick={() => handleUpdateStatus(currentOrderId, "Cancelled")}

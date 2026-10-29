@@ -6,28 +6,22 @@ import toast, { Toaster } from "react-hot-toast";
 export default function UnorderedCustomersPage() {
   const [users, setUsers] = useState([]);
   const [meta, setMeta] = useState({
-    isAfter20th: true,
-    currentDay: 21,
+    currentDay: 1,
     currentMonthName: "",
     totalRegisteredUsers: 0,
     totalDefaulters: 0,
   });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [forcePreview, setForcePreview] = useState(false);
 
-  const fetchDefaulters = async (previewMode = false) => {
+  const fetchDefaulters = async () => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/admin/unordered-users${previewMode ? "?preview=true" : ""}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch("/api/admin/unordered-users", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
         setMeta({
-          isAfter20th: data.isAfter20th,
           currentDay: data.currentDay,
           currentMonthName: data.currentMonthName,
           totalRegisteredUsers: data.totalRegisteredUsers || 0,
@@ -45,8 +39,8 @@ export default function UnorderedCustomersPage() {
   };
 
   useEffect(() => {
-    fetchDefaulters(forcePreview);
-  }, [forcePreview]);
+    fetchDefaulters();
+  }, []);
 
   // নাম, ফোন বা ইমেইল দিয়ে সার্চ ফিল্টার
   const filteredUsers = users.filter((u) => {
@@ -85,7 +79,7 @@ export default function UnorderedCustomersPage() {
             Unordered Customers (Defaulter List)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            চলতি মাসের ১ থেকে ২০ তারিখের মধ্যে যারা অন্তত ১টি প্যাকেজ (৪০ পয়েন্ট) অর্ডার সম্পন্ন করেনি তাদের তালিকা।
+            চলতি মাসের ১ তারিখ থেকে যারা এখনো অন্তত ১টি প্যাকেজ (৪০ পয়েন্ট) অর্ডার সম্পন্ন করেনি তাদের তালিকা। অর্ডার করলেই নাম এই তালিকা থেকে স্বয়ংক্রিয়ভাবে বাদ হয়ে যাবে।
           </p>
         </div>
 
@@ -96,38 +90,18 @@ export default function UnorderedCustomersPage() {
           </div>
 
           <div className="bg-rose-500/10 px-4 py-2.5 rounded-2xl border border-rose-500/30 text-center">
-            <span className="text-[10px] font-bold text-rose-300 block">Unordered (Defaulters)</span>
+            <span className="text-[10px] font-bold text-rose-300 block">Unordered (Remaining)</span>
             <span className="text-sm font-black text-rose-400">{meta.totalDefaulters} জন</span>
           </div>
 
           <button
-            onClick={() => fetchDefaulters(forcePreview)}
+            onClick={() => fetchDefaulters()}
             className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-2xl transition-all cursor-pointer shadow-md"
           >
             🔄 রিফ্রেশ
           </button>
         </div>
       </div>
-
-      {/* যদি মাসের ১ থেকে ২০ তারিখ চলে, তখন অটোমেটিক নোটিশ দেখাবে */}
-      {!meta.isAfter20th && (
-        <div className="bg-amber-500/10 border border-amber-500/40 p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h3 className="text-sm font-black text-amber-400">
-              ⏳ অর্ডারের সময়সীমা এখনো চলমান (আজ মাসের {meta.currentDay} তারিখ)
-            </h3>
-            <p className="text-xs text-slate-300">
-              সিস্টেম রুলস অনুযায়ী ইউজারদের মাসের ১ থেকে ২০ তারিখ পর্যন্ত অর্ডার করার সুযোগ রয়েছে। ২১ তারিখ শুরু হলেই তালিকাটি এখানে স্বয়ংক্রিয়ভাবে প্রদর্শিত হবে।
-            </p>
-          </div>
-          <button
-            onClick={() => setForcePreview(!forcePreview)}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shrink-0 cursor-pointer transition-all"
-          >
-            {forcePreview ? "🔒 প্রিভিউ বন্ধ করুন" : "👁️ এখনই সম্ভাব্য তালিকা দেখুন"}
-          </button>
-        </div>
-      )}
 
       {/* সার্চ ও ফিল্টার বার */}
       <div className="bg-[#1E293B] p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -162,7 +136,7 @@ export default function UnorderedCustomersPage() {
                   <th className="py-4 px-5">Phone Number</th>
                   <th className="py-4 px-5">Email Address</th>
                   <th className="py-4 px-5">Address & Details</th>
-                  <th className="py-4 px-5 text-center whitespace-nowrap">1st-20th Points</th>
+                  <th className="py-4 px-5 text-center whitespace-nowrap">This Month Points</th>
                   <th className="py-4 px-5 text-right whitespace-nowrap">Quick Contact</th>
                 </tr>
               </thead>
@@ -230,7 +204,7 @@ export default function UnorderedCustomersPage() {
                       </span>
                     </td>
 
-                    {/* পয়েন্ট স্ট্যাটাস (মোবাইল ভিউতে না ভাঙার জন্য ফিক্সড) */}
+                    {/* পয়েন্ট স্ট্যাটাস */}
                     <td className="py-4 px-5 text-center whitespace-nowrap">
                       <span className="inline-block whitespace-nowrap px-3 py-1 bg-rose-500/15 border border-rose-500/30 text-rose-400 rounded-full font-black text-[10px]">
                         {u.earnedPointsThisPeriod} / 40 Pts
@@ -270,10 +244,10 @@ export default function UnorderedCustomersPage() {
           <div className="p-16 text-center space-y-2">
             <div className="text-4xl">🎉</div>
             <h3 className="text-base font-black text-white">
-              কোনো আন-অর্ডার্ড ইউজার পাওয়া যায়নি!
+              চলতি মাসে সবাই অর্ডার সম্পন্ন করেছে!
             </h3>
             <p className="text-xs text-slate-400">
-              সব ইউজার তাদের মাসিক ৪০ পয়েন্টের প্যাকেজ অর্ডার সম্পন্ন করেছে অথবা এখনো মাসের ২১ তারিখ হয়নি।
+              এই মাসে কোনো আন-অর্ডার্ড ইউজার বাকি নেই। পরবর্তী মাসের ১ তারিখে আবার নতুন তালিকা শুরু হবে।
             </p>
           </div>
         )}
