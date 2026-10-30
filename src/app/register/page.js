@@ -1,10 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
-export default function RegisterPage() {
+const normalizeSponsorCode = (val) => {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (!s) return "";
+  return s.toUpperCase().startsWith("BSS-")
+    ? s.toUpperCase()
+    : s.toUpperCase().startsWith("BSS")
+    ? `BSS-${s.slice(3)}`
+    : `BSS-${s}`;
+};
+
+function RegisterContent() {
+  const searchParams = useSearchParams();
+
   const [formData, setFormData] = useState({
     sponsorId: "",
     name: "",
@@ -15,6 +29,21 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // 🟢 রেফারেল লিংক (/register?sponsor=BSS-...) থেকে আসলে অটোমেটিক স্পন্সর আইডি বক্সে বসে যাবে
+  useEffect(() => {
+    const urlSponsor =
+      searchParams.get("sponsor") ||
+      searchParams.get("ref") ||
+      searchParams.get("referral") ||
+      "";
+    if (urlSponsor) {
+      setFormData((prev) => ({
+        ...prev,
+        sponsorId: normalizeSponsorCode(urlSponsor),
+      }));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,33 +59,85 @@ export default function RegisterPage() {
 
     const cleanMobile = formData.mobile.trim();
     const generatedEmail = `${cleanMobile}@brightsmartshop.local`;
-    
-    // 🟢 BSS + ৫ ডিজিটের ইউনিক আইডি জেনারেট করা (যেমন: BSS24874)
-    const randomFiveDigits = Math.floor(10000 + Math.random() * 90000);
-    const generatedReferralCode = `BSS${randomFiveDigits}`;
+    const cleanSponsor = formData.sponsorId.trim()
+      ? normalizeSponsorCode(formData.sponsorId)
+      : "";
 
     try {
       const { data, error } = await authClient.signUp.email({
         email: generatedEmail,
         password: formData.password,
-        name: formData.name,
+        name: formData.name.trim(),
         mobile: cleanMobile,
-        address: formData.address,
-        sponsorId: formData.sponsorId,
-        referralCode: generatedReferralCode, // ইউজার আইডি বা রেফারেল কোড হিসেবে পাঠানো হলো
+        address: formData.address.trim(),
+        sponsorId: cleanSponsor,
+        sponsorCode: cleanSponsor,
       });
 
       if (error) {
         setErrorMsg(error.message || "এই মোবাইল নম্বর দিয়ে আগেই অ্যাকাউন্ট করা রয়েছে!");
         setLoading(false);
-      } else {
-        alert(`🎉 রেজিস্ট্রেশন সফল হয়েছে! আপনার আইডি: ${generatedReferralCode}`);
-        if (data?.user) {
-          const userWithId = { ...data.user, referralCode: generatedReferralCode };
-          localStorage.setItem("bright_user", JSON.stringify(userWithId));
-        }
-        window.location.href = "/";
+        return;
       }
+
+      // 🟢 সার্ভারের ডাটাবেসে সিকোয়েন্স অনুযায়ী স্থায়ী BSS- আইডি এবং স্পন্সর আইডি সাথে সাথে সেভ ও সিঙ্ক করা
+      let finalBssId = "";
+      try {
+        const syncRes = await fetch("/api/client/account", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: data?.user?.id || cleanMobile,
+            name: formData.name.trim(),
+            phone: cleanMobile,
+            mobile: cleanMobile,
+            address: formData.address.trim(),
+            sponsorCode: cleanSponsor,
+            password: formData.password,
+          }),
+        });
+
+        if (syncRes.ok) {
+          const syncJson = await syncRes.json();
+          if (syncJson?.user?.referralCode || syncJson?.user?.id) {
+            finalBssId = syncJson.user.referralCode || syncJson.user.id;
+          }
+        }
+
+        if (!finalBssId) {
+          const statsRes = await fetch(
+            `/api/client/dashboard-stats?phone=${encodeURIComponent(cleanMobile)}`,
+            { cache: "no-store" }
+          );
+          if (statsRes.ok) {
+            const statsJson = await statsRes.json();
+            finalBssId = statsJson?.user?.referralCode || statsJson?.user?.id || "";
+          }
+        }
+      } catch (syncErr) {
+        console.error("Profile sync error:", syncErr);
+      }
+
+      const assignedId = finalBssId || "BSS-20260011";
+
+      alert(`🎉 রেজিস্ট্রেশন সফল হয়েছে! আপনার আইডি ও স্পন্সর কোড: ${assignedId}`);
+
+      const userWithId = {
+        ...(data?.user || {}),
+        name: formData.name.trim(),
+        phone: cleanMobile,
+        mobile: cleanMobile,
+        address: formData.address.trim(),
+        id: assignedId,
+        customerId: assignedId,
+        referralCode: assignedId,
+        sponsorCode: cleanSponsor,
+        sponsorId: cleanSponsor,
+      };
+      localStorage.setItem("bright_user", JSON.stringify(userWithId));
+      window.dispatchEvent(new Event("userUpdated"));
+
+      window.location.href = "/client/dashboard";
     } catch (err) {
       console.error("Sign up error:", err);
       setErrorMsg("সার্ভারে সমস্যা হয়েছে, আবার চেষ্টা করুন।");
@@ -67,7 +148,6 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-10 font-sans text-gray-800">
       <div className="w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/80 shadow-2xl space-y-6 relative overflow-hidden">
-        
         <div className="text-center space-y-2 relative z-10">
           <Link href="/" className="inline-flex items-center justify-center gap-2.5 group">
             <img
@@ -190,8 +270,8 @@ export default function RegisterPage() {
               type="text"
               value={formData.sponsorId}
               onChange={(e) => setFormData({ ...formData, sponsorId: e.target.value })}
-              placeholder="উদাহরণ: BSS24874 (যদি থাকে)"
-              className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-gray-900 font-bold focus:outline-none focus:border-[#00875A]"
+              placeholder="উদাহরণ: BSS-20260001 (যদি থাকে)"
+              className="w-full bg-white border border-amber-200 rounded-xl px-4 py-2.5 text-xs text-gray-900 font-bold font-mono focus:outline-none focus:border-[#00875A]"
             />
           </div>
 
@@ -212,8 +292,21 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
-
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center text-xs font-bold text-[#00875A]">
+          লোড হচ্ছে...
+        </div>
+      }
+    >
+      <RegisterContent />
+    </Suspense>
   );
 }

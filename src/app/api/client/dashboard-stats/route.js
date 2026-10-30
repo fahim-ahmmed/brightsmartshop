@@ -3,13 +3,35 @@ import { ObjectId } from "mongodb";
 import { db } from "@/lib/mongo-client";
 import { getCurrentUser, syncMissingProfiles, TOP_10_FOUNDERS } from "@/lib/current-user";
 import { LEVEL_CONFIG, designationFor } from "@/lib/level-config";
-import { getStepByStepProgress, isRealNode, REAL_NODE_FILTER, countAfter } from "@/lib/level-progress";
 
 export const dynamic = "force-dynamic";
 
 const COLORS = ["#3B82F6", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4", "#64748B", "#F97316", "#84CC16"];
 
-// 🟢 গ্লোবাল চেইন নতুন করে হিসাব করে (৫ সেকেন্ড গার্ডসহ)
+function getStepByStepProgress(packagesAfter) {
+  let remaining = Number(packagesAfter || 0);
+  let level = 0;
+  let earnedTaka = 0;
+
+  for (const c of LEVEL_CONFIG) {
+    if (remaining >= c.requiredPackages) {
+      remaining -= c.requiredPackages;
+      level = c.level;
+      earnedTaka += Number(c.taka || 0);
+    } else {
+      break;
+    }
+  }
+
+  const nextCfg = LEVEL_CONFIG.find((c) => c.level === level + 1) || LEVEL_CONFIG[LEVEL_CONFIG.length - 1];
+  return {
+    level,
+    currentStepPackages: remaining,
+    nextLevelTarget: nextCfg ? nextCfg.requiredPackages : 0,
+    earnedTaka,
+  };
+}
+
 async function normalizeAndRecalculateChain() {
   const now = Date.now();
   if (globalThis.__LAST_CHAIN_SYNC__ && now - globalThis.__LAST_CHAIN_SYNC__ < 5000) {
@@ -20,7 +42,6 @@ async function normalizeAndRecalculateChain() {
   const chainCol = db.collection("global_chain");
   const usersCol = db.collection("users");
 
-  // ১. টপ ১০ ফাউন্ডারের প্রোফাইল ও নোড ঠিক করা
   const founderPhones = TOP_10_FOUNDERS.map((f) => f.phone);
   const founderNames = TOP_10_FOUNDERS.map((f) => f.name);
 
@@ -29,16 +50,24 @@ async function normalizeAndRecalculateChain() {
     .toArray();
 
   for (const f of TOP_10_FOUNDERS) {
-    const founderProfile = founderProfiles.find((p) => p.phone === f.phone || p.name === f.name);
+    const founderProfile = founderProfiles.find(
+      (p) => p.phone === f.phone || p.name === f.name
+    );
     if (!founderProfile) continue;
 
     const pid = String(founderProfile._id);
     const founderNodes = await chainCol
-      .find({ $or: [{ sequenceNo: f.seq }, { userId: pid }, { userName: f.name }] })
+      .find({
+        $or: [
+          { sequenceNo: f.seq },
+          { userId: pid },
+          { userName: f.name },
+        ],
+      })
       .sort({ sequenceNo: 1 })
       .toArray();
 
-    const purchasedNodes = founderNodes.filter(isRealNode);
+    const purchasedNodes = founderNodes.filter((n) => !n.isSystemFounder);
     const primaryNode =
       purchasedNodes.length > 0
         ? purchasedNodes[0]
@@ -52,20 +81,34 @@ async function normalizeAndRecalculateChain() {
             : String(n.chainAccountId || `M-${f.referralCode}`).replace(/^P-/, "M-");
           await chainCol.updateOne(
             { _id: primaryNode._id },
-            { $set: { userId: pid, userName: f.name, phone: f.phone, chainAccountId: mCode, isManId: true } }
+            {
+              $set: {
+                userId: pid,
+                userName: f.name,
+                phone: f.phone,
+                chainAccountId: mCode,
+                isManId: true,
+              },
+            }
           );
         } else {
           const pCode = String(n.chainAccountId || `P-${n.sequenceNo}`).replace(/^M-/, "P-");
           await chainCol.updateOne(
             { _id: n._id },
-            { $set: { userId: pid, phone: f.phone, chainAccountId: pCode, isManId: false } }
+            {
+              $set: {
+                userId: pid,
+                phone: f.phone,
+                chainAccountId: pCode,
+                isManId: false,
+              },
+            }
           );
         }
       }
     }
   }
 
-  // ২. সব নোড ক্রমানুসারে এনে প্রতিটির নিচে কয়টি আসল প্যাকেজ আছে হিসাব করা
   const allNodes = await chainCol.find({}).sort({ sequenceNo: 1, createdAt: 1 }).toArray();
   const seenManIdForUser = new Set();
   const bulkOps = [];
@@ -73,32 +116,24 @@ async function normalizeAndRecalculateChain() {
 
   const usersWithPurchasedNodes = new Set();
   for (const n of allNodes) {
-    if (isRealNode(n)) {
+    if (!n.isSystemFounder) {
       const uid = String(n.userId || n.phone || "");
       if (uid) usersWithPurchasedNodes.add(uid);
     }
   }
 
-  // 🟢 অনাথ নোড ও ফাউন্ডার প্লেসহোল্ডার ০ ধরা হয়
   const suffix = new Array(allNodes.length + 1).fill(0);
   for (let k = allNodes.length - 1; k >= 0; k--) {
-    suffix[k] = suffix[k + 1] + (isRealNode(allNodes[k]) ? Number(allNodes[k].packages ?? 1) : 0);
+    suffix[k] = suffix[k + 1] + (allNodes[k].isSystemFounder ? 0 : Number(allNodes[k].packages ?? 1));
   }
 
   for (let i = 0; i < allNodes.length; i++) {
     const node = allNodes[i];
     const uid = String(node.userId || node.phone || "");
-    const real = isRealNode(node);
 
-    // ইউজারের প্রথম আসল নোডই মেইন আইডি (M); অনাথ নোড কখনো মেইন আইডি হতে পারবে না
     let shouldBeManId = false;
     if (uid && !seenManIdForUser.has(uid)) {
-      if (node.isSystemFounder) {
-        if (!usersWithPurchasedNodes.has(uid)) {
-          seenManIdForUser.add(uid);
-          shouldBeManId = true;
-        }
-      } else if (real) {
+      if (!node.isSystemFounder || !usersWithPurchasedNodes.has(uid)) {
         seenManIdForUser.add(uid);
         shouldBeManId = true;
       }
@@ -140,7 +175,7 @@ async function normalizeAndRecalculateChain() {
       node.currentLevel = calcLevel;
     }
 
-    if (shouldBeManId && real && ObjectId.isValid(node.userId)) {
+    if (shouldBeManId && !node.isSystemFounder && ObjectId.isValid(node.userId)) {
       userBulkOps.push({
         updateOne: {
           filter: { _id: new ObjectId(node.userId) },
@@ -173,7 +208,6 @@ async function ensureDashboardIndexes() {
     db.collection("global_chain").createIndex({ sequenceNo: 1 }),
     db.collection("global_chain").createIndex({ userId: 1 }),
     db.collection("global_chain").createIndex({ authUserId: 1 }),
-    db.collection("global_chain").createIndex({ orderNo: 1 }),
     db.collection("orders").createIndex({ userId: 1, createdAt: -1 }),
     db.collection("orders").createIndex({ profileId: 1 }),
     db.collection("users").createIndex({ phone: 1 }),
@@ -181,11 +215,10 @@ async function ensureDashboardIndexes() {
   ]).catch(() => null);
 }
 
-// ভারী কাজ: উত্তর পাঠানোর পরে, সর্বোচ্চ ৬০ সেকেন্ডে একবার
 async function runMaintenance() {
   const now = Date.now();
   if (globalThis.__BSS_MAINT_RUNNING__) return;
-  if (globalThis.__BSS_MAINT_LAST__ && now - globalThis.__BSS_MAINT_LAST__ < 60000) return;
+  if (globalThis.__BSS_MAINT_LAST__ && now - globalThis.__BSS_MAINT_LAST__ < 30000) return;
   globalThis.__BSS_MAINT_RUNNING__ = true;
   globalThis.__BSS_MAINT_LAST__ = now;
   try {
@@ -213,82 +246,129 @@ async function getCategoryGroups() {
 
 export async function GET(req) {
   try {
+    // প্রথমবার বা নতুন ইউজারের ক্ষেত্রে সাথে সাথে সিঙ্ক নিশ্চিত করা
+    await syncMissingProfiles().catch(() => null);
     try {
       after(runMaintenance);
     } catch {
       runMaintenance().catch(() => null);
     }
 
-    // 🟢 শুধু লগইন সেশনের ইউজারের তথ্য। URL-এর userId/phone/email আর মানা হয় না,
-    // নইলে অন্য ইউজারের পুরোনো তথ্য মিশে যায় এবং যে কেউ অন্যের ডাটা দেখতে পারত।
+    const { searchParams } = new URL(req.url);
+    const paramUserId = searchParams.get("userId") || "";
+    const paramPhone = searchParams.get("phone") || "";
+    const paramEmail = searchParams.get("email") || "";
+
     const current = await getCurrentUser(req).catch(() => null);
-    if (!current?.authUser) {
-      return NextResponse.json({ message: "Please log in" }, { status: 401 });
-    }
-    const authUser = current.authUser;
-    const legacy = current.legacy || null;
+    let authUser = current?.authUser || null;
+    let legacy = current?.legacy || null;
 
     const usersCol = db.collection("users");
+    const authCol = db.collection("user");
 
-    const aid = String(authUser.id || authUser._id);
-    const orQuery = [{ authUserId: aid }];
-    if (ObjectId.isValid(aid)) orQuery.push({ _id: new ObjectId(aid) });
-    if (legacy?._id) orQuery.push({ _id: legacy._id });
-    const searchPhone = legacy?.phone || legacy?.mobile || authUser?.mobile || "";
+    const orQuery = [];
+    if (paramUserId) {
+      const cleanParam = paramUserId.replace(/^BSS-/i, "");
+      const bssParam = paramUserId.toUpperCase().startsWith("BSS-")
+        ? paramUserId.toUpperCase()
+        : `BSS-${cleanParam}`;
+      if (ObjectId.isValid(paramUserId)) {
+        orQuery.push({ _id: new ObjectId(paramUserId) });
+      }
+      orQuery.push(
+        { _id: paramUserId },
+        { authUserId: paramUserId },
+        { referralCode: paramUserId },
+        { referralCode: bssParam },
+        { referralCode: cleanParam },
+        { customerId: bssParam }
+      );
+    }
+    if (authUser?.id) {
+      const aid = String(authUser.id);
+      if (ObjectId.isValid(aid)) orQuery.push({ _id: new ObjectId(aid) });
+      orQuery.push({ authUserId: aid });
+    }
+    const searchPhone = paramPhone || legacy?.phone || authUser?.mobile || "";
     if (searchPhone) {
       orQuery.push({ phone: searchPhone }, { mobile: searchPhone });
     }
+    if (paramEmail) {
+      orQuery.push({ email: paramEmail });
+    }
 
-    const matchingProfiles = await usersCol.find({ $or: orQuery }).toArray();
+    let matchingProfiles = [];
+    if (orQuery.length > 0) {
+      matchingProfiles = await usersCol.find({ $or: orQuery }).toArray();
+    }
+    if (!legacy && matchingProfiles.length > 0) {
+      legacy = matchingProfiles[0];
+    }
+
+    if (!authUser && legacy?.authUserId && ObjectId.isValid(legacy.authUserId)) {
+      authUser = await authCol.findOne({ _id: new ObjectId(legacy.authUserId) });
+    }
+
+    if (!authUser && !legacy) {
+      return NextResponse.json({ message: "Please log in" }, { status: 401 });
+    }
 
     const profileId = legacy ? String(legacy._id) : null;
     const authId = authUser ? String(authUser.id || authUser._id) : null;
-    const userPhone = legacy?.phone || legacy?.mobile || authUser?.mobile || "";
+    const userPhone = legacy?.phone || legacy?.mobile || authUser?.mobile || paramPhone || "";
     const allProfileIds = matchingProfiles.map((p) => String(p._id));
-    const ownerIds = [...new Set([profileId, authId, ...allProfileIds].filter(Boolean))];
+    const ownerIds = [...new Set([profileId, authId, paramUserId, ...allProfileIds].filter(Boolean))];
+
+    // 🟢 ইউজারের পার্মানেন্ট BSS- আইডি নিশ্চিত করা
+    const rawCode = String(legacy?.referralCode || legacy?.customerId || "BSS-20260011");
+    const finalPermanentId = rawCode.toUpperCase().startsWith("BSS-")
+      ? rawCode.toUpperCase()
+      : `BSS-${rawCode}`;
+    const shortCodeWithoutPrefix = finalPermanentId.replace(/^BSS-/i, "");
 
     const nodeQuery = { $or: [{ userId: { $in: ownerIds } }, { authUserId: { $in: ownerIds } }] };
     if (userPhone) nodeQuery.$or.push({ phone: userPhone });
+    if (legacy?.name) nodeQuery.$or.push({ userName: legacy.name });
 
     const orderQuery = { $or: [{ userId: { $in: ownerIds } }, { profileId: { $in: ownerIds } }] };
     if (userPhone) orderQuery.$or.push({ phone: userPhone });
 
-    const permanentId = legacy?.referralCode || profileId || authId || "20260048";
+    // 🟢 স্পন্সর লিস্টের জন্য নতুন BSS- আইডি, পুরাতন কোড, ফোন বা মঙ্গো আইডি সবকিছু দিয়েই ম্যাচ করা যাতে আগের কোনো টেস্ট স্পন্সর মিস না হয়
+    const sponsorMatchTargets = [
+      finalPermanentId,
+      shortCodeWithoutPrefix,
+      ...ownerIds,
+      ...(userPhone ? [userPhone] : []),
+    ].filter(Boolean);
 
-    const [nodes, userOrders, sponsorListRaw, grouped, realSeqDocs] = await Promise.all([
+    const [nodes, userOrders, sponsorListRaw, grouped] = await Promise.all([
       db.collection("global_chain").find(nodeQuery).sort({ sequenceNo: 1 }).toArray(),
       db.collection("orders").find(orderQuery).sort({ createdAt: -1 }).toArray(),
       usersCol
         .find({
+          _id: { $ne: legacy?._id },
           $or: [
-            { sponsorCode: permanentId },
-            { referredBy: permanentId },
-            ...(profileId ? [{ sponsorCode: profileId }, { referredBy: profileId }] : []),
-            ...(userPhone ? [{ sponsorCode: userPhone }, { referredBy: userPhone }] : []),
+            { sponsorCode: { $in: sponsorMatchTargets } },
+            { sponsorId: { $in: sponsorMatchTargets } },
+            { referredBy: { $in: sponsorMatchTargets } },
           ],
         })
         .sort({ createdAt: -1 })
         .toArray(),
       getCategoryGroups(),
-      // 🟢 চেইনের সব আসল নোডের sequenceNo (এক কুয়েরিতে), প্রতিটি নোডের নিচের সংখ্যা মেমোরিতে হিসাব হবে
-      db
-        .collection("global_chain")
-        .find(REAL_NODE_FILTER, { projection: { sequenceNo: 1, _id: 0 } })
-        .sort({ sequenceNo: 1 })
-        .toArray(),
     ]);
 
-    const realSeqs = realSeqDocs.map((d) => Number(d.sequenceNo));
-
-    // 🟢 নিজের আসল নোড (ফাউন্ডার প্লেসহোল্ডার ও অনাথ নোড বাদ)
-    const ownedNodes = nodes.filter(isRealNode);
+    const ownedNodes = nodes.filter((n) => !n.isSystemFounder);
     const ownPackages = ownedNodes.length;
+    const primaryOwnedNode = ownedNodes[0] || null;
 
-    // 🟢 মেইন আইডি = প্রথম আসল নোড
-    const manNode = ownedNodes.find((n) => n.isManId) || ownedNodes[0] || null;
-
-    // 🟢 মেইন আইডির পরে চেইনে মোট কয়টি আসল প্যাকেজ এসেছে
-    const packagesInNetwork = manNode ? countAfter(realSeqs, manNode.sequenceNo) : 0;
+    let packagesInNetwork = 0;
+    if (primaryOwnedNode) {
+      packagesInNetwork = await db.collection("global_chain").countDocuments({
+        sequenceNo: { $gt: primaryOwnedNode.sequenceNo },
+        isSystemFounder: { $ne: true },
+      });
+    }
 
     const stepProgress = getStepByStepProgress(packagesInNetwork);
     const level = stepProgress.level;
@@ -301,13 +381,16 @@ export async function GET(req) {
       (walletBalance !== Number(legacy.walletBalance || 0) ||
         level !== Number(legacy.level || 0) ||
         packagesInNetwork !== Number(legacy.accumulatedPackages || 0) ||
-        ownPackages !== Number(legacy.totalPackages || 0))
+        legacy.referralCode !== finalPermanentId)
     ) {
       await usersCol
         .updateOne(
           { _id: legacy._id },
           {
             $set: {
+              id: finalPermanentId,
+              customerId: finalPermanentId,
+              referralCode: finalPermanentId,
               level,
               currentLevel: level,
               designation: designationFor(level),
@@ -320,6 +403,37 @@ export async function GET(req) {
         .catch(() => null);
     }
 
+    // 🟢 আমাকে কে রেফার করেছে (Sponsor Code ও Sponsor Name) খুঁজে বের করা
+    const myRawSponsor = String(
+      legacy?.sponsorCode || legacy?.sponsorId || legacy?.referredBy || authUser?.sponsorCode || ""
+    ).trim();
+    let mySponsorCode = "";
+    let mySponsorName = "";
+
+    if (myRawSponsor && myRawSponsor !== "SYSTEM-TOP") {
+      const cleanSp = myRawSponsor.replace(/^BSS-/i, "");
+      const bssSp = myRawSponsor.toUpperCase().startsWith("BSS-")
+        ? myRawSponsor.toUpperCase()
+        : `BSS-${cleanSp}`;
+      const spOr = [
+        { referralCode: myRawSponsor },
+        { referralCode: bssSp },
+        { referralCode: cleanSp },
+        { customerId: bssSp },
+        { phone: myRawSponsor },
+        { authUserId: myRawSponsor },
+      ];
+      if (ObjectId.isValid(myRawSponsor)) spOr.unshift({ _id: new ObjectId(myRawSponsor) });
+      const spDoc = await usersCol.findOne({ $or: spOr });
+      if (spDoc) {
+        const spCode = String(spDoc.referralCode || spDoc.customerId || bssSp);
+        mySponsorCode = spCode.toUpperCase().startsWith("BSS-") ? spCode.toUpperCase() : `BSS-${spCode}`;
+        mySponsorName = spDoc.name || "";
+      } else {
+        mySponsorCode = bssSp;
+      }
+    }
+
     const reservePoints = matchingProfiles.reduce(
       (max, p) => Math.max(max, Number(p.reservePoints || 0)),
       Number(legacy?.reservePoints || 0)
@@ -329,21 +443,21 @@ export async function GET(req) {
       (o) => !["Cancelled", "cancelled", "CANCELLED"].includes(o.status)
     );
 
-    const finalPermanentId =
-      legacy?.referralCode ||
-      manNode?.chainAccountId?.replace(/^M-/, "") ||
-      profileId ||
-      authId ||
-      "20260048";
-
-    const sponsorList = sponsorListRaw.map((m) => ({
-      id: m.referralCode || String(m._id),
-      name: m.name || "Member",
-      phone: m.phone || m.mobile || "",
-      joinDate: m.createdAt,
-      hasPurchased: (m.totalPackages || 0) > 0,
-      packages: m.totalPackages || 0,
-    }));
+    const sponsorList = sponsorListRaw.map((m) => {
+      const mCode = String(m.referralCode || m.customerId || m._id);
+      const formattedMCode = mCode.toUpperCase().startsWith("BSS-")
+        ? mCode.toUpperCase()
+        : `BSS-${mCode}`;
+      return {
+        id: formattedMCode,
+        referralCode: formattedMCode,
+        name: m.name || "Member",
+        phone: m.phone || m.mobile || "",
+        joinDate: m.createdAt,
+        hasPurchased: (m.totalPackages || 0) > 0,
+        packages: m.totalPackages || 0,
+      };
+    });
 
     const categoryStats = grouped
       .filter((g) => g._id)
@@ -352,35 +466,20 @@ export async function GET(req) {
     const rawEmail = legacy?.email || authUser?.email || "";
     const email = rawEmail.endsWith(".local") ? "" : rawEmail;
 
-    // 🟢 প্রতিটি নোডের নিচে কয়টি আসল প্যাকেজ আছে সরাসরি গুনে বের করা:
-    // শেষ নোডের ০, তার আগেরটার ১, এভাবে বাড়বে
-    const myChainNodes = ownedNodes.map((n) => {
-      const isMan = manNode ? String(n._id) === String(manNode._id) : false;
-      const pkgsAfter = countAfter(realSeqs, n.sequenceNo);
-      const step = getStepByStepProgress(pkgsAfter);
-      return {
-        _id: String(n._id),
-        sequenceNo: n.sequenceNo,
-        chainAccountId: n.chainAccountId || (isMan ? `M-${n.sequenceNo}` : `P-${n.sequenceNo}`),
-        isManId: isMan,
-        accumulatedPackages: pkgsAfter,
-        currentStepPackages: step.currentStepPackages,
-        nextLevelTarget: step.nextLevelTarget,
-        currentLevel: step.level,
-        designation: designationFor(step.level),
-        createdAt: n.createdAt,
-      };
-    });
-
     return NextResponse.json({
       user: {
         name: legacy?.name || authUser?.name || "Customer",
         id: finalPermanentId,
+        customerId: finalPermanentId,
         _id: profileId || authId,
         referralCode: finalPermanentId,
-        sponsorCode: legacy?.sponsorCode || legacy?.referredBy || "",
+        sponsorCode: mySponsorCode,
+        sponsorId: mySponsorCode,
+        referredBy: mySponsorCode,
+        sponsorName: mySponsorName,
         email,
         mobile: userPhone,
+        phone: userPhone,
         address: legacy?.address || authUser?.address || "",
         profileImage: legacy?.profileImage || authUser?.image || "",
         role: legacy?.role || authUser?.role || "Client",
@@ -389,19 +488,43 @@ export async function GET(req) {
         currentLevel: level,
         designation: designationFor(level),
         accumulatedPackages: packagesInNetwork,
-        currentStepPackages,
+        currentStepPackages: currentStepPackages,
         newPurchasersAfterMe: packagesInNetwork * 40,
-        nextLevelTarget,
-        walletBalance,
+        nextLevelTarget: nextLevelTarget,
+        walletBalance: walletBalance,
         totalOrders: validOrders.length,
-        reservePoints,
+        reservePoints: reservePoints,
         pointsNeededForNextPackage: 40 - (reservePoints % 40),
         totalPackages: ownPackages,
-        manSequenceNo: manNode ? manNode.sequenceNo : null,
         totalSponsors: sponsorList.length,
         sponsorsList: sponsorList,
       },
-      myChainNodes,
+      myChainNodes: await Promise.all(
+        ownedNodes.map(async (n, idx) => {
+          const isFirstNode = idx === 0;
+          let nodePackagesAfter = 0;
+          if (isFirstNode) {
+            nodePackagesAfter = packagesInNetwork;
+          } else {
+            nodePackagesAfter = await db.collection("global_chain").countDocuments({
+              sequenceNo: { $gt: n.sequenceNo },
+              isSystemFounder: { $ne: true },
+            });
+          }
+          const nodeStep = getStepByStepProgress(nodePackagesAfter);
+          return {
+            _id: String(n._id),
+            sequenceNo: n.sequenceNo,
+            chainAccountId: n.chainAccountId || (isFirstNode ? `M-${finalPermanentId}` : `P-${n.sequenceNo}`),
+            isManId: isFirstNode,
+            accumulatedPackages: nodePackagesAfter,
+            currentStepPackages: nodeStep.currentStepPackages,
+            currentLevel: nodeStep.level,
+            designation: designationFor(nodeStep.level),
+            createdAt: n.createdAt,
+          };
+        })
+      ),
       recentOrders: userOrders.slice(0, 10),
       sponsorList,
       categoryStats,

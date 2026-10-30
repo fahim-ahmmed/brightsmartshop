@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { useCart } from "@/context/CartContext";
 
+const ensureBssId = (val) => {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (!s) return "";
+  return s.toUpperCase().startsWith("BSS-") ? s.toUpperCase() : `BSS-${s}`;
+};
+
 export default function SiteHeader() {
   const router = useRouter();
 
@@ -18,6 +25,7 @@ export default function SiteHeader() {
   const [localUser, setLocalUser] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [displayUserId, setDisplayUserId] = useState("");
+  const [displayUserName, setDisplayUserName] = useState("");
   const dropdownRef = useRef(null);
 
   // Sync with LocalStorage if available
@@ -28,8 +36,11 @@ export default function SiteHeader() {
         try {
           const parsed = JSON.parse(savedUser);
           setLocalUser(parsed);
-          if (parsed?.referralCode) {
-            setDisplayUserId(parsed.referralCode);
+          if (parsed?.referralCode || parsed?.id) {
+            setDisplayUserId(ensureBssId(parsed.referralCode || parsed.id));
+          }
+          if (parsed?.name) {
+            setDisplayUserName(parsed.name);
           }
         } catch (e) {
           console.error("User parse error", e);
@@ -53,7 +64,7 @@ export default function SiteHeader() {
   useEffect(() => {
     async function loadUserId() {
       try {
-        const uid = currentUser?.id || currentUser?._id || "";
+        const uid = currentUser?._id || currentUser?.id || currentUser?.referralCode || "";
         const phone = currentUser?.mobile || currentUser?.phone || "";
 
         if (!uid && !phone) return;
@@ -67,12 +78,22 @@ export default function SiteHeader() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data?.user?.id) {
-            setDisplayUserId(data.user.id);
-            if (localUser) {
-              localUser.referralCode = data.user.id;
-              localStorage.setItem("bright_user", JSON.stringify(localUser));
-            }
+          if (data?.user?.id || data?.user?.referralCode) {
+            const bssId = ensureBssId(data.user.referralCode || data.user.id);
+            setDisplayUserId(bssId);
+            if (data.user.name) setDisplayUserName(data.user.name);
+
+            const savedRaw = localStorage.getItem("bright_user");
+            const prevLocal = savedRaw ? JSON.parse(savedRaw) : {};
+            const updatedLocal = {
+              ...prevLocal,
+              id: bssId,
+              customerId: bssId,
+              referralCode: bssId,
+              name: data.user.name || prevLocal.name,
+              profileImage: data.user.profileImage || prevLocal.profileImage,
+            };
+            localStorage.setItem("bright_user", JSON.stringify(updatedLocal));
           }
         }
       } catch (e) {
@@ -83,14 +104,18 @@ export default function SiteHeader() {
     if (currentUser) {
       loadUserId();
     }
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.mobile]);
 
-  // 🟢 এখানে finalUserId ডিফাইন করা হলো যাতে ReferenceError না আসে
+  // 🟢 সব জায়গায় একই নাম এবং একই BSS- আইডি নিশ্চিত করা
   const finalUserId =
-    displayUserId ||
-    currentUser?.referralCode ||
-    localUser?.referralCode ||
-    "20260048";
+    ensureBssId(
+      displayUserId ||
+        currentUser?.referralCode ||
+        localUser?.referralCode ||
+        localUser?.id
+    ) || "BSS-20260001";
+
+  const finalUserName = displayUserName || currentUser?.name || "Customer";
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -244,27 +269,41 @@ export default function SiteHeader() {
                           currentUser.image ||
                           defaultHumanAvatar
                         }
-                        alt={currentUser.name || "User"}
+                        alt={finalUserName}
                         className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-emerald-500/30 group-hover:scale-105 transition-transform"
                       />
                       <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
                     </div>
 
-                    <span className="hidden sm:block text-xs font-black text-gray-900 max-w-[110px] truncate">
-                      {currentUser.name}
-                    </span>
+                    <div className="hidden sm:block text-left leading-tight">
+                      <span className="block text-xs font-black text-gray-900 max-w-[120px] truncate">
+                        {finalUserName}
+                      </span>
+                      <span className="block text-[9px] font-mono font-bold text-[#00875A]">
+                        {finalUserId}
+                      </span>
+                    </div>
 
-                    <svg className={`w-3 h-3 text-gray-400 group-hover:text-[#00875A] transform transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className={`w-3 h-3 text-gray-400 group-hover:text-[#00875A] transform transition-transform ${
+                        dropdownOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
 
-                  {/* Dropdown Menu - Perfectly positioned under profile button */}
+                  {/* Dropdown Menu */}
                   {dropdownOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
-                        <p className="text-xs font-black text-gray-900 truncate">{currentUser.name}</p>
-                        <p className="text-[10px] text-gray-500 font-medium truncate">ID: {finalUserId}</p>
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
+                        <p className="text-xs font-black text-gray-900 truncate">{finalUserName}</p>
+                        <p className="text-[11px] text-emerald-700 font-mono font-bold truncate mt-0.5">
+                          ID: {finalUserId}
+                        </p>
                       </div>
 
                       <Link
@@ -274,6 +313,15 @@ export default function SiteHeader() {
                       >
                         <span>📊</span>
                         <span>My Dashboard</span>
+                      </Link>
+
+                      <Link
+                        href="/client/account"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-gray-700 hover:bg-emerald-50 hover:text-[#00875A] transition-colors"
+                      >
+                        <span>👤</span>
+                        <span>My Account</span>
                       </Link>
 
                       <Link
@@ -346,10 +394,10 @@ export default function SiteHeader() {
                       <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3">
                         {/* Image & Title/Price */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <img 
-                            src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"} 
-                            alt={item.title} 
-                            className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0" 
+                          <img
+                            src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"}
+                            alt={item.title}
+                            className="w-12 h-12 rounded-xl object-cover bg-white border border-gray-100 shrink-0"
                           />
                           <div className="min-w-0">
                             <h4 className="font-extrabold text-xs text-gray-900 line-clamp-1">{item.title}</h4>

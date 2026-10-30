@@ -4,6 +4,13 @@ import React, { useState, useEffect } from "react";
 import { authClient } from "@/lib/auth-client";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 
+const ensureBssId = (val) => {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (!s) return "";
+  return s.toUpperCase().startsWith("BSS-") ? s.toUpperCase() : `BSS-${s}`;
+};
+
 export default function MySponsorListPage() {
   const [loading, setLoading] = useState(true);
   const [displayUserId, setDisplayUserId] = useState("");
@@ -24,8 +31,8 @@ export default function MySponsorListPage() {
       try {
         const parsed = JSON.parse(savedUser);
         setLocalUser(parsed);
-        if (parsed?.referralCode) {
-          setDisplayUserId(parsed.referralCode);
+        if (parsed?.referralCode || parsed?.id) {
+          setDisplayUserId(ensureBssId(parsed.referralCode || parsed.id));
         }
       } catch (e) {
         console.error("User parse error", e);
@@ -38,7 +45,7 @@ export default function MySponsorListPage() {
   useEffect(() => {
     async function fetchSponsorData() {
       try {
-        const uid = currentUser?.id || currentUser?._id || "";
+        const uid = currentUser?._id || currentUser?.id || currentUser?.referralCode || "";
         const phone = currentUser?.mobile || currentUser?.phone || "";
         const email = currentUser?.email || "";
 
@@ -58,15 +65,23 @@ export default function MySponsorListPage() {
 
         if (res.ok) {
           const json = await res.json();
-          if (json.user?.id) {
-            setDisplayUserId(json.user.id);
-            if (localUser) {
-              localUser.referralCode = json.user.id;
-              localStorage.setItem("bright_user", JSON.stringify(localUser));
-            }
+          if (json.user?.id || json.user?.referralCode) {
+            const bssId = ensureBssId(json.user.referralCode || json.user.id);
+            setDisplayUserId(bssId);
+
+            const savedRaw = localStorage.getItem("bright_user");
+            const currentLocal = savedRaw ? JSON.parse(savedRaw) : {};
+            const updatedLocal = {
+              ...currentLocal,
+              id: bssId,
+              customerId: bssId,
+              referralCode: bssId,
+              name: json.user.name || currentLocal.name,
+            };
+            localStorage.setItem("bright_user", JSON.stringify(updatedLocal));
+            window.dispatchEvent(new Event("userUpdated"));
           }
 
-          // ব্যাকএন্ড থেকে আসা স্পন্সর লিস্ট সেট করা
           if (json.sponsorList && Array.isArray(json.sponsorList)) {
             setSponsorList(json.sponsorList);
           } else if (json.stats?.sponsorsList && Array.isArray(json.stats.sponsorsList)) {
@@ -82,13 +97,14 @@ export default function MySponsorListPage() {
     fetchSponsorData();
   }, [currentUser]);
 
-  // 🟢 ন্যাভবার ও ড্যাশবোর্ডের মতো একই পার্মানেন্ট আইডি নিশ্চিতকরণ
+  // 🟢 ন্যাভবার ও ড্যাশবোর্ডের মতো একই পার্মানেন্ট BSS- আইডি নিশ্চিতকরণ
   const sponsorId =
-    displayUserId ||
-    currentUser?.referralCode ||
-    localUser?.referralCode ||
-    localUser?.id ||
-    "20260048";
+    ensureBssId(
+      displayUserId ||
+        currentUser?.referralCode ||
+        localUser?.referralCode ||
+        localUser?.id
+    ) || "BSS-20260001";
 
   // Referral Link Copy Handler
   const handleCopyLink = () => {
@@ -113,7 +129,6 @@ export default function MySponsorListPage() {
 
       {/* 2. Main Body Content */}
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1200px] w-full mx-auto overflow-x-hidden">
-        
         {/* Header Title & Sponsor ID Banner */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs">
           <div>
@@ -131,7 +146,7 @@ export default function MySponsorListPage() {
           <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center gap-3">
             <div>
               <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
-                YOUR SPONSOR ID
+                YOUR SPONSOR / REFERRAL ID
               </span>
               <span className="text-lg font-black text-emerald-900 font-mono">
                 {sponsorId}
@@ -190,7 +205,7 @@ export default function MySponsorListPage() {
               <h3 className="text-lg font-bold text-gray-900">Direct Referred Members</h3>
             </div>
             <span className="text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-              Sponsor ID: <span className="font-mono text-gray-900">{sponsorId}</span>
+              Sponsor ID: <span className="font-mono font-black text-emerald-800">{sponsorId}</span>
             </span>
           </div>
 
@@ -202,6 +217,7 @@ export default function MySponsorListPage() {
                     <th className="py-3 px-3">SL</th>
                     <th className="py-3 px-3">MEMBER ID</th>
                     <th className="py-3 px-3">NAME</th>
+                    <th className="py-3 px-3">PHONE</th>
                     <th className="py-3 px-3">JOIN DATE</th>
                     <th className="py-3 px-3">STATUS</th>
                     <th className="py-3 px-3 text-right">PACKAGES</th>
@@ -211,10 +227,11 @@ export default function MySponsorListPage() {
                   {sponsorList.map((member, index) => (
                     <tr key={member.id || index} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-3.5 px-3 font-bold text-gray-500">{index + 1}</td>
-                      <td className="py-3.5 px-3 font-mono font-bold text-emerald-700">
-                        {member.id || member.chainAccountId}
+                      <td className="py-3.5 px-3 font-mono font-black text-emerald-700">
+                        {ensureBssId(member.id || member.referralCode || member.chainAccountId)}
                       </td>
                       <td className="py-3.5 px-3 font-bold text-gray-900">{member.name}</td>
+                      <td className="py-3.5 px-3 font-mono text-gray-600">{member.phone || "N/A"}</td>
                       <td className="py-3.5 px-3 text-gray-500">
                         {member.joinDate ? new Date(member.joinDate).toLocaleDateString() : "Recent"}
                       </td>
@@ -256,7 +273,6 @@ export default function MySponsorListPage() {
             </div>
           )}
         </div>
-
       </main>
     </div>
   );

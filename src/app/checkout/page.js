@@ -22,11 +22,12 @@ function CheckoutContent() {
 
   const isDirectBuy = Boolean(buyTitle && buyPrice);
 
+  // 🟢 ডিফল্টভাবে অফিস রিসিভ ("office_receive") সিলেক্ট করা থাকবে
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     address: "",
-    paymentMethod: "cod",
+    paymentMethod: "office_receive",
     senderNumber: "",
     transactionId: "",
   });
@@ -34,7 +35,8 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
-  const [userSponsor, setUserSponsor] = useState("");
+  const [userCustomerId, setUserCustomerId] = useState(""); // ইউজারের নিজের BSS আইডি
+  const [userSponsor, setUserSponsor] = useState(""); // ইউজারকে যে রেফার করেছে তার BSS আইডি
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -46,28 +48,69 @@ function CheckoutContent() {
       toast.error("অর্ডার করার আগে অনুগ্রহ করে লগিন করুন।");
       router.push("/login");
     } else {
-      try {
-        const user = savedUser ? JSON.parse(savedUser) : {};
-        const sponsor =
-          user.sponsorId ||
-          user.sponsorCode ||
-          user.referredBy ||
-          user.sponsor ||
-          sessionUser?.sponsorCode ||
-          "";
-        setUserSponsor(sponsor);
+      async function syncUserAndSponsor() {
+        try {
+          const user = savedUser ? JSON.parse(savedUser) : {};
+          const uid = sessionUser?.id || user._id || user.id || "";
+          const uphone = sessionUser?.mobile || sessionUser?.phone || user.phone || user.mobile || "";
 
-        setFormData((prev) => ({
-          ...prev,
-          name: user.name || sessionUser?.name || prev.name,
-          phone: user.phone || user.mobile || sessionUser?.mobile || prev.phone,
-          address: user.address || sessionUser?.address || prev.address,
-        }));
-      } catch (e) {
-        console.error("User storage parse error", e);
-      } finally {
-        setIsCheckingAuth(false);
+          setFormData((prev) => ({
+            ...prev,
+            name: user.name || sessionUser?.name || prev.name,
+            phone: uphone || prev.phone,
+            address: user.address || sessionUser?.address || prev.address,
+          }));
+
+          // সার্ভার থেকে ইউজারের আসল পার্মানেন্ট BSS- আইডি এবং স্পন্সর আইডি নিয়ে আসা
+          const params = new URLSearchParams();
+          if (uid) params.set("userId", uid);
+          if (uphone) params.set("phone", uphone);
+
+          const res = await fetch(`/api/client/dashboard-stats?${params.toString()}`, {
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.user) {
+              const myBssId = data.user.referralCode || data.user.id || "";
+              const mySponsorId = data.user.sponsorCode || "";
+              setUserCustomerId(myBssId);
+              setUserSponsor(mySponsorId !== "SYSTEM-TOP" ? mySponsorId : "");
+
+              setFormData((prev) => ({
+                ...prev,
+                name: data.user.name || prev.name,
+                phone: data.user.mobile || prev.phone,
+                address: data.user.address || prev.address,
+              }));
+
+              // localStorage-ও আপডেট করে রাখা যাতে সব জায়গায় নাম ও আইডি এক থাকে
+              const updatedLocal = {
+                ...user,
+                id: myBssId,
+                customerId: myBssId,
+                referralCode: myBssId,
+                name: data.user.name || user.name,
+                phone: data.user.mobile || user.phone,
+                sponsorCode: mySponsorId,
+              };
+              localStorage.setItem("bright_user", JSON.stringify(updatedLocal));
+            }
+          } else {
+            const fallbackId = user.referralCode || user.customerId || user.id || "";
+            const fallbackSponsor =
+              user.sponsorCode || user.sponsorId || user.referredBy || sessionUser?.sponsorCode || "";
+            setUserCustomerId(fallbackId);
+            setUserSponsor(fallbackSponsor !== "SYSTEM-TOP" ? fallbackSponsor : "");
+          }
+        } catch (e) {
+          console.error("User storage parse error", e);
+        } finally {
+          setIsCheckingAuth(false);
+        }
       }
+
+      syncUserAndSponsor();
     }
   }, [router, session, sessionLoading]);
 
@@ -130,9 +173,15 @@ function CheckoutContent() {
 
       const orderPayload = {
         userId: userId,
+        customerId: userCustomerId,
+        referralCode: userCustomerId,
         customerName: formData.name,
         phone: formData.phone,
-        address: isOfficeReceive ? "অফিস রিসিভ (Office Pickup)" : formData.address,
+        address: isOfficeReceive
+          ? formData.address
+            ? `${formData.address} (অফিস রিসিভ)`
+            : "অফিস রিসিভ (Office Pickup)"
+          : formData.address,
         paymentMethod: formData.paymentMethod,
         paymentDetails: {
           senderNumber: formData.senderNumber,
@@ -156,7 +205,8 @@ function CheckoutContent() {
         deliveryCharge,
         totalAmount,
         status: "Pending",
-        sponsorId: userSponsor,
+        sponsorId: userSponsor || userCustomerId,
+        sponsorCode: userSponsor || "",
         createdAt: new Date(),
       };
 
@@ -261,24 +311,34 @@ function CheckoutContent() {
                 }
                 placeholder={
                   isOfficeReceive
-                    ? "অফিস রিসিভের ক্ষেত্রে ঠিকানার প্রয়োজন নেই (ঐচ্ছিক)"
+                    ? "অফিস রিসিভ (প্রয়োজনে নোট বা ঠিকানা লিখতে পারেন - ঐচ্ছিক)"
                     : "বাসা নং, রোড নং, এলাকা, জেলা..."
                 }
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#00875A]"
               />
             </div>
 
-            {userSponsor && (
-              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-2">
-                <span className="text-amber-800 font-bold text-xs">
-                  🤝 আপনার রেফারেন্স আইডি: <span className="font-mono">{userSponsor}</span>
-                </span>
-              </div>
-            )}
+            {/* 🟢 ইউজারের নিজের আইডি এবং স্পন্সর আইডি প্রদর্শন */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {userCustomerId && (
+                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center gap-2">
+                  <span className="text-emerald-900 font-bold text-xs">
+                    🆔 আপনার আইডি: <span className="font-mono font-black">{userCustomerId}</span>
+                  </span>
+                </div>
+              )}
+              {userSponsor && (
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-2">
+                  <span className="text-amber-800 font-bold text-xs">
+                    🤝 স্পন্সর আইডি: <span className="font-mono font-black">{userSponsor}</span>
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <h2 className="text-sm font-extrabold text-gray-900 border-b pb-3 pt-2">
-            ২. পেমেন্ট সিলেক্ট করুন
+            ২. ডেলিভারি ও পেমেন্ট সিলেক্ট করুন
           </h2>
 
           <div className="space-y-3">
@@ -299,7 +359,7 @@ function CheckoutContent() {
                 }
               />
               <span className="text-xs font-bold text-emerald-800">
-                🏢 অফিস রিসিভ (Office Pickup - চার্জ ৳০)
+                🏢 অফিস রিসিভ (Office Pickup - চার্জ ৳০) [Default]
               </span>
             </label>
 

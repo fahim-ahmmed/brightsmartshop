@@ -4,14 +4,28 @@ import React, { useState, useEffect } from "react";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
 import { authClient } from "@/lib/auth-client";
 
+const ensureBssFormat = (val) => {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (!s || s === "SYSTEM-TOP" || s === "None") return "";
+  return s.toUpperCase().startsWith("BSS-") ? s.toUpperCase() : `BSS-${s}`;
+};
+
 export default function MyAccountPage() {
+  const { data: session } = authClient?.useSession
+    ? authClient.useSession()
+    : { data: null };
+
   const [userData, setUserData] = useState({
-    name: "Md Fahim Ahammad Shihab",
-    email: "fahim@example.com",
-    mobile: "01700000000",
-    address: "Dhaka, Bangladesh",
-    sponsorCode: "SP-2026-88",
-    id: "20260048",
+    name: "Customer",
+    email: "",
+    mobile: "",
+    address: "",
+    referralCode: "BSS-20260001",
+    sponsorCode: "",
+    sponsorName: "",
+    id: "BSS-20260001",
+    _id: "",
     role: "Client",
     profileImage: "",
   });
@@ -19,6 +33,7 @@ export default function MyAccountPage() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
   // Password Change States
@@ -52,21 +67,66 @@ export default function MyAccountPage() {
           }
         }
 
+        const uid =
+          session?.user?.id ||
+          localParsed?._id ||
+          localParsed?.id ||
+          localParsed?.referralCode ||
+          "";
+        const phone =
+          session?.user?.mobile ||
+          session?.user?.phone ||
+          localParsed?.mobile ||
+          localParsed?.phone ||
+          "";
+        const email = session?.user?.email || localParsed?.email || "";
+
+        const params = new URLSearchParams();
+        if (uid) params.set("userId", uid);
+        if (phone) params.set("phone", phone);
+        if (email) params.set("email", email);
+
         // ২. API থেকে লেটেস্ট ইউজার ডাটা ফেচ
-        const res = await fetch("/api/client/dashboard-stats");
+        const res = await fetch(`/api/client/dashboard-stats?${params.toString()}`, {
+          cache: "no-store",
+        });
+
         if (res.ok) {
           const json = await res.json();
           if (json.user) {
+            const myBssId =
+              ensureBssFormat(json.user.referralCode || json.user.id) ||
+              ensureBssFormat(localParsed?.referralCode || localParsed?.id) ||
+              "BSS-20260001";
+
+            const referredByCode = ensureBssFormat(
+              json.user.sponsorCode || json.user.referredBy || localParsed?.sponsorCode || ""
+            );
+
             const fetchedUser = {
-              name: json.user.name || localParsed?.name || "Md Fahim Ahammad Shihab",
-              email: json.user.email || localParsed?.email || "fahim@example.com",
-              mobile: json.user.mobile || json.user.phone || localParsed?.mobile || localParsed?.phone || "",
-              address: json.user.address || localParsed?.address || "Dhaka, Bangladesh",
-              sponsorCode: json.user.sponsorCode || localParsed?.sponsorCode || "SP-2026-88",
-              id: json.user.id || json.user._id || localParsed?.id || "20260048",
+              name: json.user.name || localParsed?.name || "Customer",
+              email: json.user.email || localParsed?.email || "",
+              mobile:
+                json.user.mobile ||
+                json.user.phone ||
+                localParsed?.mobile ||
+                localParsed?.phone ||
+                "",
+              address: json.user.address || localParsed?.address || "",
+              referralCode: myBssId,
+              sponsorCode: referredByCode,
+              sponsorName: json.user.sponsorName || "",
+              id: myBssId,
+              _id: json.user._id || localParsed?._id || "",
               role: json.user.role || localParsed?.role || "Client",
-              profileImage: json.user.profileImage || json.user.image || localParsed?.profileImage || localParsed?.image || "",
+              profileImage:
+                json.user.profileImage ||
+                json.user.image ||
+                localParsed?.profileImage ||
+                localParsed?.image ||
+                "",
             };
+
             setUserData(fetchedUser);
             setFormData({
               name: fetchedUser.name,
@@ -74,9 +134,31 @@ export default function MyAccountPage() {
               address: fetchedUser.address,
               profileImage: fetchedUser.profileImage,
             });
+
+            // LocalStorage ও Header-এর সাথে সিঙ্ক করে রাখা যাতে সব জায়গায় একই নাম ও BSS- আইডি থাকে
+            const syncedLocal = {
+              ...(localParsed || {}),
+              ...fetchedUser,
+              id: myBssId,
+              customerId: myBssId,
+              referralCode: myBssId,
+            };
+            localStorage.setItem("bright_user", JSON.stringify(syncedLocal));
+            window.dispatchEvent(new Event("userUpdated"));
           }
         } else if (localParsed) {
-          setUserData((prev) => ({ ...prev, ...localParsed }));
+          const myBssId =
+            ensureBssFormat(localParsed.referralCode || localParsed.id) || "BSS-20260001";
+          const referredByCode = ensureBssFormat(
+            localParsed.sponsorCode || localParsed.referredBy || ""
+          );
+          setUserData((prev) => ({
+            ...prev,
+            ...localParsed,
+            id: myBssId,
+            referralCode: myBssId,
+            sponsorCode: referredByCode,
+          }));
           setFormData({
             name: localParsed.name || "",
             mobile: localParsed.mobile || localParsed.phone || "",
@@ -91,7 +173,7 @@ export default function MyAccountPage() {
       }
     }
     fetchUserData();
-  }, []);
+  }, [session]);
 
   const handleChange = (e) => {
     setFormData({
@@ -134,7 +216,7 @@ export default function MyAccountPage() {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 75% কোয়ালিটিতে WebP কম্প্রেশন (৩ MB ছবি হয়ে যাবে মাত্র ১৫-২০ KB!)
+        // 75% কোয়ালিটিতে WebP কম্প্রেশন
         const compressedBase64 = canvas.toDataURL("image/webp", 0.75);
         setFormData((prev) => ({
           ...prev,
@@ -155,18 +237,19 @@ export default function MyAccountPage() {
       ...userData,
       name: formData.name,
       mobile: formData.mobile,
+      phone: formData.mobile,
       address: formData.address,
       profileImage: formData.profileImage,
     };
 
     try {
-      // 🟢 ব্যাকএন্ডে রিকোয়েস্ট পাঠানোর সময় userId যুক্ত করে দেওয়া হলো
       const res = await fetch("/api/client/profile/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          ...formData, 
-          userId: userData.id 
+        body: JSON.stringify({
+          ...formData,
+          userId: userData._id || userData.id,
+          id: userData.id,
         }),
       });
 
@@ -188,24 +271,13 @@ export default function MyAccountPage() {
       setMessage({ type: "success", text: "Profile updated successfully!" });
       setIsEditing(false);
     } catch (err) {
-      // Local fallback state update
-      setUserData(updatedUserObj);
-
-      const savedUser = localStorage.getItem("bright_user");
-      const currentLocal = savedUser ? JSON.parse(savedUser) : {};
-      const newLocalData = { ...currentLocal, ...updatedUserObj };
-      localStorage.setItem("bright_user", JSON.stringify(newLocalData));
-      window.dispatchEvent(new Event("storage"));
-      window.dispatchEvent(new Event("userUpdated"));
-
-      setMessage({ type: "success", text: "Profile details saved successfully!" });
-      setIsEditing(false);
+      setMessage({ type: "error", text: err.message || "Failed to save profile changes." });
     } finally {
       setSaving(false);
     }
   };
 
-  // 🟢 পাসওয়ার্ড পরিবর্তনের হ্যান্ডলার (পুরাতন পাসওয়ার্ড যাচাইকরণ সহ)
+  // 🟢 পাসওয়ার্ড পরিবর্তনের হ্যান্ডলার
   const handlePasswordSave = async (e) => {
     e.preventDefault();
     setPasswordSaving(true);
@@ -245,13 +317,21 @@ export default function MyAccountPage() {
       setPasswordMessage({ type: "success", text: "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!" });
       setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
     } catch (err) {
-      setPasswordMessage({ 
-        type: "error", 
-        text: err.message || "পুরাতন পাসওয়ার্ড সঠিক নয় অথবা পরিবর্তন করা সম্ভব হয়নি।" 
+      setPasswordMessage({
+        type: "error",
+        text: err.message || "পুরাতন পাসওয়ার্ড সঠিক নয় অথবা পরিবর্তন করা সম্ভব হয়নি।",
       });
     } finally {
       setPasswordSaving(false);
     }
+  };
+
+  const handleCopyMyReferralLink = () => {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/register?sponsor=${userData.referralCode || userData.id}`;
+    navigator.clipboard.writeText(url);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2500);
   };
 
   if (loading) {
@@ -279,7 +359,7 @@ export default function MyAccountPage() {
               My Account
             </h1>
             <p className="text-xs text-gray-500 mt-0.5">
-              Manage your personal information, address, and account details.
+              Manage your personal information, referral ID, sponsor details, and address.
             </p>
           </div>
 
@@ -319,53 +399,60 @@ export default function MyAccountPage() {
         {/* User Card View / Edit Form */}
         <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-2xs space-y-6">
           {/* User Avatar & Identity Header */}
-          <div className="flex items-center gap-5 pb-6 border-b border-gray-100">
-            {/* Profile Image Picker Container */}
-            <div className="relative group shrink-0">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white font-black text-2xl flex items-center justify-center shadow-md overflow-hidden border-2 border-emerald-500/20">
-                {(isEditing ? formData.profileImage : userData.profileImage) ? (
-                  <img
-                    src={isEditing ? formData.profileImage : userData.profileImage}
-                    alt={userData.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>{userData.name ? userData.name[0].toUpperCase() : "F"}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 pb-6 border-b border-gray-100">
+            <div className="flex items-center gap-5">
+              {/* Profile Image Picker Container */}
+              <div className="relative group shrink-0">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white font-black text-2xl flex items-center justify-center shadow-md overflow-hidden border-2 border-emerald-500/20">
+                  {(isEditing ? formData.profileImage : userData.profileImage) ? (
+                    <img
+                      src={isEditing ? formData.profileImage : userData.profileImage}
+                      alt={userData.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{userData.name ? userData.name[0].toUpperCase() : "U"}</span>
+                  )}
+                </div>
+
+                {/* Camera Button when Editing */}
+                {isEditing && (
+                  <label className="absolute -bottom-2 -right-2 bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-full cursor-pointer shadow-md transition-transform hover:scale-110 flex items-center justify-center">
+                    <span className="text-xs">📷</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                  </label>
                 )}
               </div>
 
-              {/* Camera Button when Editing */}
-              {isEditing && (
-                <label className="absolute -bottom-2 -right-2 bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-full cursor-pointer shadow-md transition-transform hover:scale-110 flex items-center justify-center">
-                  <span className="text-xs">📷</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
-              )}
+              <div>
+                <h2 className="text-xl font-black text-gray-900">{userData.name}</h2>
+                <p className="text-xs text-gray-500 font-medium mt-0.5">
+                  Customer ID  :{" "}
+                  <span className="font-mono font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    {userData.id}
+                  </span>{" "}
+                  | Role: <span className="font-bold text-gray-700">{userData.role}</span>
+                </p>
+                {isEditing && (
+                  <label className="inline-block mt-2 text-[11px] text-emerald-600 font-extrabold cursor-pointer hover:underline">
+                    📷 Pick Profile Picture
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
             </div>
 
-            <div>
-              <h2 className="text-xl font-black text-gray-900">{userData.name}</h2>
-              <p className="text-xs text-gray-500 font-medium">
-                Customer ID: <span className="font-mono font-bold text-emerald-700">{userData.id}</span> | Role:{" "}
-                <span className="font-bold text-gray-700">{userData.role}</span>
-              </p>
-              {isEditing && (
-                <label className="inline-block mt-2 text-[11px] text-emerald-600 font-extrabold cursor-pointer hover:underline">
-                  📷 Pick Profile Picture
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
+            
           </div>
 
           {!isEditing ? (
@@ -380,30 +467,60 @@ export default function MyAccountPage() {
 
               <div className="space-y-1 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                  EMAIL ADDRESS (REQUIRED)
-                </span>
-                <p className="text-sm font-extrabold text-gray-900">{userData.email || "N/A"}</p>
-              </div>
-
-              <div className="space-y-1 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                   MOBILE NUMBER
                 </span>
-                <p className="text-sm font-extrabold text-gray-900">
-                  {userData.mobile ? userData.mobile : <span className="text-gray-400 font-normal italic">Not provided</span>}
+                <p className="text-sm font-extrabold text-gray-900 font-mono">
+                  {userData.mobile ? (
+                    userData.mobile
+                  ) : (
+                    <span className="text-gray-400 font-normal italic">Not provided</span>
+                  )}
+                </p>
+              </div>
+
+              {/* 🟢 নিজের রেফারেল কোড (যার মাধ্যমে অন্যরা একাউন্ট খুলবে) */}
+              <div className="space-y-1 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80">
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block">
+                   MY ID  
+                </span>
+                <p className="text-sm font-black text-emerald-900 font-mono">
+                  {userData.referralCode || userData.id}
+                </p>
+              </div>
+
+              {/* 🟢 আমাকে কে রেফার করেছে (Sponsor Code) */}
+              <div className="space-y-1 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/80">
+                <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider block">
+                  SPONSOR CODE (আমাকে যিনি রেফার করেছেন)
+                </span>
+                <p className="text-sm font-black text-gray-900 font-mono">
+                  {userData.sponsorCode ? (
+                    <>
+                      <span>{userData.sponsorCode}</span>
+                      {userData.sponsorName && (
+                        <span className="text-xs font-bold text-amber-800 font-sans ml-2">
+                          ({userData.sponsorName})
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-400 font-normal font-sans italic">
+                        No Sponsor
+                    </span>
+                  )}
                 </p>
               </div>
 
               <div className="space-y-1 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                  SPONSOR CODE
+                  EMAIL ADDRESS
                 </span>
                 <p className="text-sm font-extrabold text-gray-900">
-                  {userData.sponsorCode ? userData.sponsorCode : <span className="text-gray-400 font-normal italic">None</span>}
+                  {userData.email || <span className="text-gray-400 font-normal italic">Not provided</span>}
                 </p>
               </div>
 
-              <div className="sm:col-span-2 space-y-1 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
+              <div className="space-y-1 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                   DELIVERY ADDRESS
                 </span>
@@ -433,25 +550,10 @@ export default function MyAccountPage() {
                     />
                   </div>
 
-                  {/* Disabled Email Address */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
-                      Email Address (Cannot be changed)
-                    </label>
-                    <input
-                      type="email"
-                      disabled
-                      value={userData.email}
-                      className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-500 cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Editable Mobile */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                      Mobile Number <span className="text-gray-400 font-normal lowercase"></span>
+                      Mobile Number
                     </label>
                     <input
                       type="tel"
@@ -462,17 +564,36 @@ export default function MyAccountPage() {
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
                     />
                   </div>
+                </div>
 
-                  {/* Disabled Sponsor Code */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Disabled My Referral Code */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
-                      Sponsor Code
+                    <label className="text-xs font-bold text-emerald-700 uppercase tracking-wider block">
+                        Customer ID
                     </label>
                     <input
                       type="text"
                       disabled
-                      value={userData.sponsorCode || "None"}
-                      className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-500 cursor-not-allowed"
+                      value={userData.referralCode || userData.id}
+                      className="w-full bg-emerald-50/60 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs font-black font-mono text-emerald-900 cursor-not-allowed"
+                    />
+                  </div>
+
+                  {/* Disabled Sponsor Code (Referred By) */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                      Sponsor Code (আমাকে যিনি রেফার করেছেন)
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={
+                        userData.sponsorCode
+                          ? `${userData.sponsorCode}${userData.sponsorName ? ` (${userData.sponsorName})` : ""}`
+                          : "Direct / None"
+                      }
+                      className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold font-mono text-gray-500 cursor-not-allowed"
                     />
                   </div>
                 </div>

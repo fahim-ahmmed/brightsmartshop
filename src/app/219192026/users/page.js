@@ -46,17 +46,19 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, []);
 
-  // Search Filter Logic
+  // Search Filter Logic (নাম, ফোন বা BSS ID দিয়ে সার্চ)
   const filteredUsers = users.filter((u) => {
     const q = searchTerm.toLowerCase();
     return (
       (u.name && u.name.toLowerCase().includes(q)) ||
       (u.phone && u.phone.includes(q)) ||
+      (u.referralCode && u.referralCode.toLowerCase().includes(q)) ||
+      (u.sponsorCode && u.sponsorCode.toLowerCase().includes(q)) ||
       (u.email && u.email.toLowerCase().includes(q))
     );
   });
 
-  // Sorting Logic (Top IDs on top)
+  // Sorting Logic (Top IDs on top, then by sequence)
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     if (a.isSystemFounder && !b.isSystemFounder) return -1;
     if (!a.isSystemFounder && b.isSystemFounder) return 1;
@@ -67,8 +69,14 @@ export default function AdminUsersPage() {
       return numA - numB;
     }
 
-    return 0;
+    return (a.userSequence || 99999) - (b.userSequence || 99999);
   });
+
+  const getBssId = (u) => {
+    const raw = u.referralCode || u.customerId || u.id || "";
+    if (!raw) return "N/A";
+    return String(raw).toUpperCase().startsWith("BSS-") ? String(raw).toUpperCase() : `BSS-${raw}`;
+  };
 
   // 🟢 Excel/CSV Download Handler
   const handleDownloadExcel = () => {
@@ -77,14 +85,13 @@ export default function AdminUsersPage() {
       return;
     }
 
-    // CSV Header: Name, Phone Number, Address, ID, Sponsor ID
     let csvContent = "Name,Phone Number,Address,ID,Sponsor ID\n";
 
     sortedUsers.forEach((u) => {
       const name = `"${(u.name || "Customer").replace(/"/g, '""')}"`;
       const phone = `"${getDisplayPhone(u).replace(/"/g, '""')}"`;
       const address = `"${(u.address || u.deliveryAddress || "").replace(/"/g, '""')}"`;
-      const id = `"${(u._id || u.id || u.referralCode || "").replace(/"/g, '""')}"`;
+      const id = `"${getBssId(u).replace(/"/g, '""')}"`;
       const sponsorId = `"${(u.sponsorCode || u.referredBy || "").replace(/"/g, '""')}"`;
 
       csvContent += `${name},${phone},${address},${id},${sponsorId}\n`;
@@ -101,7 +108,6 @@ export default function AdminUsersPage() {
     toast.success("Excel sheet downloaded successfully!");
   };
 
-  // 1. Open Edit Modal
   const handleOpenEditModal = (user) => {
     setEditingUser(user);
     setEditForm({
@@ -113,7 +119,6 @@ export default function AdminUsersPage() {
     });
   };
 
-  // 2. Submit Edit Form
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     setUpdating(true);
@@ -143,7 +148,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  // 3. Delete User Handler
   const handleDeleteUser = async (userId, userName) => {
     const toastId = toast.loading(`Deleting "${userName || "this user"}"...`);
 
@@ -176,18 +180,16 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6 font-sans">
-      
       {/* Top Banner */}
       <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-white">Registered Users & Accounts</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time registered customer and staff accounts from database.
+            Real-time registered customer accounts with permanent BSS ID & Sponsor ID.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* 🟢 Download Excel Button */}
           <button
             onClick={handleDownloadExcel}
             className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
@@ -217,7 +219,7 @@ export default function AdminUsersPage() {
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by name or phone number..."
+          placeholder="Search by name, phone number or BSS ID..."
           className="w-full sm:w-96 bg-[#0F172A] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
         />
       </div>
@@ -238,8 +240,10 @@ export default function AdminUsersPage() {
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
                   <th className="py-3">SL</th>
+                  <th className="py-3">User ID (Referral ID)</th>
                   <th className="py-3">User Name</th>
                   <th className="py-3">Mobile Number</th>
+                  <th className="py-3">Sponsor ID</th>
                   <th className="py-3">Password</th>
                   <th className="py-3">Role</th>
                   <th className="py-3">Joined Date</th>
@@ -249,13 +253,20 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-slate-800/60">
                 {sortedUsers.map((u, idx) => {
                   const uid = u._id || u.id;
+                  const bssId = getBssId(u);
+                  const sponsorId = u.sponsorCode || u.referredBy || "None";
                   return (
-                    <tr 
-                      key={uid || idx} 
-                      className={`transition-colors ${u.isSystemFounder ? "bg-amber-500/10 hover:bg-amber-500/20" : "hover:bg-slate-800/60"}`}
+                    <tr
+                      key={uid || idx}
+                      className={`transition-colors ${
+                        u.isSystemFounder ? "bg-amber-500/10 hover:bg-amber-500/20" : "hover:bg-slate-800/60"
+                      }`}
                     >
                       <td className="py-3 text-slate-500 font-mono">{idx + 1}</td>
-                      <td className="py-3 font-bold text-white flex items-center gap-2">
+                      <td className="py-3 font-mono font-black text-sky-400 whitespace-nowrap">
+                        {bssId}
+                      </td>
+                      <td className="py-3 font-bold text-white flex items-center gap-2 whitespace-nowrap">
                         <div className="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 font-bold flex items-center justify-center text-xs border border-emerald-500/30">
                           {u.name ? u.name[0].toUpperCase() : "U"}
                         </div>
@@ -268,27 +279,32 @@ export default function AdminUsersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-3 text-slate-300 font-mono font-bold text-emerald-400">
+                      <td className="py-3 font-mono font-bold text-emerald-400 whitespace-nowrap">
                         {getDisplayPhone(u)}
                       </td>
-                      <td className="py-3 text-amber-300 font-mono font-semibold">
+                      <td className="py-3 font-mono font-bold text-amber-300 whitespace-nowrap">
+                        {sponsorId !== "SYSTEM-TOP" ? sponsorId : "SYSTEM-TOP"}
+                      </td>
+                      <td className="py-3 text-amber-300 font-mono font-semibold whitespace-nowrap">
                         {u.password || u.rawPassword || "••••••••"}
                       </td>
-                      <td className="py-3">
-                        <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] ${
-                          u.role === "Admin" || u.role === "Super Admin" || u.role === "admin"
-                            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                            : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                        }`}>
+                      <td className="py-3 whitespace-nowrap">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full font-black text-[10px] ${
+                            u.role === "Admin" || u.role === "Super Admin" || u.role === "admin"
+                              ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                              : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          }`}
+                        >
                           {u.role || "Customer"}
                         </span>
                       </td>
-                      <td className="py-3 text-slate-400 font-mono">
+                      <td className="py-3 text-slate-400 font-mono whitespace-nowrap">
                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "Recent"}
                       </td>
-                      
+
                       {/* Action Buttons */}
-                      <td className="py-3 text-right">
+                      <td className="py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditModal(u)}
@@ -315,9 +331,7 @@ export default function AdminUsersPage() {
           <div className="py-12 text-center space-y-3">
             <div className="text-4xl">👥</div>
             <h3 className="text-sm font-bold text-white">No Users Found</h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              No registered users found.
-            </p>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">No registered users found.</p>
           </div>
         )}
       </div>
@@ -326,7 +340,6 @@ export default function AdminUsersPage() {
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
           <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl space-y-6 relative">
-            
             <div className="flex justify-between items-center border-b border-slate-700 pb-3">
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <span>✏️</span> Edit User Information
@@ -340,8 +353,6 @@ export default function AdminUsersPage() {
             </div>
 
             <form onSubmit={handleUpdateUser} className="space-y-4">
-              
-              {/* Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-300">User Name *</label>
                 <input
@@ -353,7 +364,6 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              {/* Phone */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-300">Mobile Number *</label>
                 <input
@@ -365,7 +375,6 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              {/* Password */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-300">Password</label>
                 <input
@@ -377,7 +386,6 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              {/* Role */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-300">Account Role</label>
                 <select
@@ -391,7 +399,6 @@ export default function AdminUsersPage() {
                 </select>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-3 pt-3 border-t border-slate-700">
                 <button
                   type="button"
@@ -408,13 +415,10 @@ export default function AdminUsersPage() {
                   {updating ? "Updating..." : "💾 Save Changes"}
                 </button>
               </div>
-
             </form>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }
