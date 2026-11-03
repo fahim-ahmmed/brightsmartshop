@@ -8,7 +8,14 @@ import { LEVEL_CONFIG } from "@/lib/level-config";
 export default function LevelsPage() {
   const [stats, setStats] = useState({
     currentLevel: 0,
+    mainLevel: 0,
     accumulatedPackages: 0,
+    currentStepPackages: 0,
+    nextLevelTarget: 3,
+    isExtraStage: false,
+    extraStepPackages: 0,
+    extraNextLevelTarget: 10,
+    extraPackagesNeeded: 10,
     totalPackages: 0,
     walletBalance: 0,
   });
@@ -26,7 +33,12 @@ export default function LevelsPage() {
         const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
 
         const userId = session?.user?.id || localUser?._id || localUser?.id || "";
-        const phone = session?.user?.mobile || session?.user?.phone || localUser?.mobile || localUser?.phone || "";
+        const phone =
+          session?.user?.mobile ||
+          session?.user?.phone ||
+          localUser?.mobile ||
+          localUser?.phone ||
+          "";
         const email = session?.user?.email || localUser?.email || "";
 
         const params = new URLSearchParams();
@@ -53,7 +65,9 @@ export default function LevelsPage() {
   }, [session]);
 
   const currentLevel = Number(stats.currentLevel || 0);
+  const mainLevel = Number(stats.mainLevel ?? currentLevel);
   const networkPackages = Number(stats.accumulatedPackages || 0);
+  const showExtra = Boolean(stats.isExtraStage || currentLevel >= 9 || mainLevel >= 9);
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans flex flex-col lg:flex-row text-gray-800 w-full">
@@ -69,11 +83,11 @@ export default function LevelsPage() {
               How Will Customers Benefit
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              আপনার মেইন আইডির পর গ্লোবাল চেইনে নতুন প্যাকেজ যুক্ত হলে স্বয়ংক্রিয়ভাবে লেভেল আপ ও ক্যাশব্যাক বোনাস যোগ হবে।
+              লেভেল ৯ পর্যন্ত সমস্ত প্যাকেজ হিট করবে। লেভেল ৯ স্পর্শ করার পর ৫০% মেইন চেইনে (লেভেল ১ থেকে ২৪ পর্যন্ত) এবং ৫০% এক্সট্রা প্যাকেজ ফান্ডে যুক্ত হবে।
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 ${showExtra ? "sm:grid-cols-4" : "sm:grid-cols-3"} gap-4`}>
             <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
               <span className="text-xs font-bold text-slate-400 block">আপনার বর্তমান লেভেল</span>
               <span className="text-2xl font-black text-emerald-400 mt-1 block">
@@ -82,11 +96,34 @@ export default function LevelsPage() {
             </div>
 
             <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
-              <span className="text-xs font-bold text-slate-400 block">মেইন আইডির পর নেটওয়ার্ক প্যাকেজ</span>
+              <span className="text-xs font-bold text-slate-400 block">
+                মেইন চেইন ধাপে জমা
+              </span>
               <span className="text-2xl font-black text-amber-400 mt-1 block">
-                {loading ? "..." : `${networkPackages} Pkg`}
+                {loading
+                  ? "..."
+                  : `${stats.currentStepPackages || 0} / ${stats.nextLevelTarget || 0} Pkg`}
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold block mt-0.5">
+                মোট নেটওয়ার্ক সেল: {networkPackages} Pkg
               </span>
             </div>
+
+            {showExtra && (
+              <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-2xl">
+                <span className="text-xs font-bold text-amber-300 block">
+                  এক্সট্রা প্যাকেজ (Extra Package)
+                </span>
+                <span className="text-2xl font-black text-amber-400 mt-1 block">
+                  {loading
+                    ? "..."
+                    : `${stats.extraStepPackages || 0} / ${stats.extraNextLevelTarget || 10} Pkg`}
+                </span>
+                <span className="text-[10px] text-amber-200/80 font-bold block mt-0.5">
+                  আরো লাগবে: {stats.extraPackagesNeeded || 0} টি
+                </span>
+              </div>
+            )}
 
             <div className="bg-[#1E293B] border border-slate-700 p-5 rounded-2xl">
               <span className="text-xs font-bold text-slate-400 block">আমার নিজস্ব প্যাকেজ আইডি (M+P)</span>
@@ -96,12 +133,14 @@ export default function LevelsPage() {
             </div>
           </div>
 
-          {/* Level Table (মোবাইল ভিউতে যাতে ব্যাজ বা টেক্সট ভেঙে না যায় সেজন্য whitespace-nowrap দেওয়া হয়েছে) */}
+          {/* Level Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-800">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-950 text-slate-400 uppercase font-black text-[10px] border-b border-slate-800">
                   <th className="py-3.5 px-4 whitespace-nowrap">LEVEL</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">PACKAGE</th>
+                  <th className="py-3.5 px-4 whitespace-nowrap">EXTRA PACKAGE (PER PERSON)</th>
                   <th className="py-3.5 px-4 whitespace-nowrap">TAKA (CASHBACK)</th>
                   <th className="py-3.5 px-4 whitespace-nowrap">DESIGNATION</th>
                   <th className="py-3.5 px-4 text-right whitespace-nowrap">STATUS</th>
@@ -115,9 +154,23 @@ export default function LevelsPage() {
                       key={row.level}
                       className={achieved ? "bg-emerald-500/10" : "hover:bg-slate-900/60"}
                     >
-                      <td className="py-3.5 px-4 font-black text-white whitespace-nowrap">{row.level}</td>
+                      <td className="py-3.5 px-4 font-black text-white whitespace-nowrap">
+                        Level {row.level}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-300 whitespace-nowrap">
+                        {row.requiredPackages.toLocaleString()}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-bold whitespace-nowrap">
+                        {row.extraPackages > 0 ? (
+                          <span className="inline-block whitespace-nowrap px-2.5 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[11px] font-black">
+                            +{row.extraPackages.toLocaleString()} Extra Pkg
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-[11px]">—</span>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 font-black text-emerald-400 whitespace-nowrap">
-                        ৳ {String(row.taka).padStart(2, "0")}
+                        ৳ {row.taka.toLocaleString()}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="inline-block whitespace-nowrap px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black">
@@ -138,6 +191,10 @@ export default function LevelsPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl text-xs text-emerald-300 font-bold text-center">
+            📌 লেভেল ৯ পর্যন্ত সমস্ত প্যাকেজ হিট করবে, লেভেল ১০ থেকে প্রতিটি ম্যান আইডি এর আন্ডারে উপরে উল্লেখিত সিরিয়াল অনুযায়ী এক্সট্রা প্যাকেজ থাকবে এবং তার লেভেল কমপ্লিট হবে।
           </div>
         </div>
       </main>

@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { db } from "@/lib/mongo-client";
-import { ensureProfile, getCurrentUser, syncMissingProfiles, requireAdmin } from "@/lib/current-user";
-import { LEVEL_CONFIG, RESERVED_TOP_POSITIONS, designationFor } from "@/lib/level-config";
-import { getStepByStepProgress } from "@/lib/level-progress";
+import { ensureProfile, getCurrentUser, syncMissingProfiles } from "@/lib/current-user";
+import {
+  LEVEL_CONFIG,
+  RESERVED_TOP_POSITIONS,
+  designationFor,
+  evaluateGlobalChain,
+} from "@/lib/level-config";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +23,7 @@ function orderQuery(targetId) {
   };
 }
 
-// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং লেভেল ক্যালকুলেশন ইঞ্জিন
+// 🟢 পয়েন্ট, রিজার্ভ পয়েন্ট, Man ID, Product ID এবং ২৪ লেভেল (৫০%-৫০% মেইন ও এক্সট্রা প্যাকেজ সহ) ক্যালকুলেশন ইঞ্জিন
 export async function processOrderToGlobalChain({ userId, userName, phone, points, orderNo }) {
   const addedPoints = Number(points || 0);
   if (addedPoints <= 0) return;
@@ -52,20 +56,13 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
       walletBalance: 0,
       reservePoints: 0,
       totalPackages: 0,
-      referralCode: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+      referralCode: `BSS-2026${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: new Date(),
     });
     profile = await users.findOne({ _id: ins.insertedId });
   }
 
   const nodeUserId = String(profile._id);
-
-  // 🟢 একই অর্ডার আগেই চেইনে ঢুকে থাকলে আর কিছু করা হবে না (ডুপ্লিকেট নোড ঠেকাতে)
-  if (orderNo) {
-    const already = await chain.countDocuments({ orderNo });
-    if (already > 0) return;
-  }
-
   const previousReserve = Number(profile.reservePoints || 0);
   const totalAvailablePoints = previousReserve + addedPoints;
 
@@ -87,7 +84,6 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
     const existingPurchasedNodesCount = await chain.countDocuments({
       $or: [{ userId: nodeUserId }, { authUserId: String(profile.authUserId || userId) }],
       isSystemFounder: { $ne: true },
-      $and: [{ $or: [{ orderNo: { $exists: true, $nin: [null, ""] } }, { chainAccountId: { $exists: true, $nin: [null, ""] } }] }],
     });
     const isManId = existingPurchasedNodesCount === 0;
 
@@ -117,7 +113,6 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
       sequenceNo: nextSequenceNo,
       chainAccountId,
       orderNo,
-      orderSeq: i,
       userId: nodeUserId,
       authUserId: String(profile.authUserId || userId),
       userName: profile.name || userName || "Customer",
@@ -126,106 +121,123 @@ export async function processOrderToGlobalChain({ userId, userName, phone, point
       points: 40,
       packages: 1,
       accumulatedPackages: 0,
+      mainChainPackagesAfter: 0,
+      currentStepPackages: 0,
+      extraStepPackages: 0,
+      extraPackagesReceived: 0,
       currentLevel: 0,
+      mainLevel: 0,
+      extraLevel: 9,
       earnedTaka: 0,
       createdAt: new Date(),
     });
 
     await users.updateOne({ _id: profile._id }, { $inc: { totalPackages: 1 } });
+  }
 
-    // 🟢 উপরের সকল নোডকে হিট করা
-    const upperNodes = await chain.find({ sequenceNo: { $lt: nextSequenceNo } }).toArray();
+  // 🟢 নতুন প্যাকেজ যুক্ত হওয়ার পর পুরো গ্লোবাল চেইনে লেভেল ১-২৪ মেইন চেইন ও ৫০%-৫০% এক্সট্রা প্যাকেজ হিসাব প্রয়োগ
+  const allNodes = await chain.find({}).sort({ sequenceNo: 1, createdAt: 1 }).toArray();
+  const evaluated = evaluateGlobalChain(allNodes);
 
-    for (const up of upperNodes) {
-      const newAccumulated = (up.accumulatedPackages || 0) + 1;
-      const previousLevel = up.currentLevel || 0;
+  for (let idx = 0; idx < allNodes.length; idx++) {
+    const oldNode = allNodes[idx];
+    const sim = evaluated[idx];
+    const previousLevel = Number(oldNode.currentLevel || 0);
+    const newLevel = sim.level;
 
-      const newLevel = Math.max(previousLevel, getStepByStepProgress(newAccumulated).level);
-
-      let rewardTaka = 0;
-      if (newLevel > previousLevel) {
-        for (let l = previousLevel + 1; l <= newLevel; l++) {
-          const cfg = LEVEL_CONFIG.find((item) => item.level === l);
-          if (cfg) rewardTaka += cfg.taka;
-        }
+    let rewardTaka = 0;
+    if (newLevel > previousLevel) {
+      for (let l = previousLevel + 1; l <= newLevel; l++) {
+        const cfg = LEVEL_CONFIG.find((item) => item.level === l);
+        if (cfg) rewardTaka += cfg.taka;
       }
+    }
 
-      // প্রোডাক্ট আইডির টাকা শুধু ওই আইডিতেই জমা থাকবে, ইউজারের ওয়ালেটে যাবে না
-      await chain.updateOne(
-        { _id: up._id },
+    await chain.updateOne(
+      { _id: oldNode._id },
+      {
+        $set: {
+          isManId: sim.shouldBeManId,
+          accumulatedPackages: sim.rawPackagesAfter,
+          mainChainPackagesAfter: sim.mainChainPackagesAfter,
+          currentStepPackages: sim.currentStepPackages,
+          extraStepPackages: sim.extraStepPackages,
+          extraPackagesReceived: sim.extraPackagesReceived,
+          currentLevel: newLevel,
+          mainLevel: sim.mainLevel,
+          extraLevel: sim.extraLevel,
+          earnedTaka: sim.earnedTaka,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (!sim.shouldBeManId || oldNode.isSystemFounder) continue;
+
+    const ownerFilter = {
+      $or: [
+        ...(ObjectId.isValid(oldNode.userId) ? [{ _id: new ObjectId(oldNode.userId) }] : []),
+        { _id: oldNode.userId },
+        { authUserId: String(oldNode.userId) },
+        ...(oldNode.phone ? [{ phone: oldNode.phone }] : []),
+      ],
+    };
+
+    const ownerDoc = await users.findOne(ownerFilter);
+    if (ownerDoc) {
+      await users.updateOne(
+        { _id: ownerDoc._id },
         {
           $set: {
-            accumulatedPackages: newAccumulated,
+            level: newLevel,
             currentLevel: newLevel,
+            mainLevel: sim.mainLevel,
+            extraLevel: sim.extraLevel,
+            designation: designationFor(newLevel),
+            accumulatedPackages: sim.rawPackagesAfter,
+            mainChainPackagesAfter: sim.mainChainPackagesAfter,
+            currentStepPackages: sim.currentStepPackages,
+            extraStepPackages: sim.extraStepPackages,
+            extraPackagesReceived: sim.extraPackagesReceived,
+            walletBalance: sim.earnedTaka,
             updatedAt: new Date(),
           },
-          ...(!up.isManId && rewardTaka > 0 ? { $inc: { earnedTaka: rewardTaka } } : {}),
         }
       );
 
-      if (!up.isManId) continue;
+      if (ownerDoc.authUserId && ObjectId.isValid(ownerDoc.authUserId)) {
+        await db
+          .collection("user")
+          .updateOne(
+            { _id: new ObjectId(ownerDoc.authUserId) },
+            {
+              $set: {
+                level: newLevel,
+                walletBalance: sim.earnedTaka,
+              },
+            }
+          )
+          .catch(() => null);
+      }
 
-      const ownerFilter = {
-        $or: [
-          ...(ObjectId.isValid(up.userId) ? [{ _id: new ObjectId(up.userId) }] : []),
-          { _id: up.userId },
-          { authUserId: String(up.userId) },
-          ...(up.phone ? [{ phone: up.phone }] : []),
-        ],
-      };
-
-      const ownerDoc = await users.findOne(ownerFilter);
-      if (ownerDoc) {
-        const highestLevel = newLevel;
-        const userUpdate = {
-          $set: {
-            level: highestLevel,
-            currentLevel: highestLevel,
-            designation: designationFor(highestLevel),
-            accumulatedPackages: newAccumulated,
-            updatedAt: new Date(),
-          },
-        };
-
-        if (rewardTaka > 0) {
-          userUpdate.$inc = { walletBalance: rewardTaka };
-        }
-
-        await users.updateOne({ _id: ownerDoc._id }, userUpdate);
-
-        if (ownerDoc.authUserId && ObjectId.isValid(ownerDoc.authUserId)) {
-          await db
-            .collection("user")
-            .updateOne(
-              { _id: new ObjectId(ownerDoc.authUserId) },
-              {
-                $set: { level: highestLevel },
-                ...(rewardTaka > 0 ? { $inc: { walletBalance: rewardTaka } } : {}),
-              }
-            )
-            .catch(() => null);
-        }
-
-        if (rewardTaka > 0) {
-          await db.collection("wallet_history").insertOne({
-            userId: String(ownerDoc._id),
-            authUserId: String(ownerDoc.authUserId || ""),
-            chainAccountId: up.chainAccountId || "Man ID",
-            isManId: true,
-            amount: rewardTaka,
-            fromLevel: previousLevel,
-            toLevel: newLevel,
-            triggeredByOrderNo: orderNo,
-            type: "level_reward",
-            createdAt: new Date(),
-          });
-        }
+      if (rewardTaka > 0) {
+        await db.collection("wallet_history").insertOne({
+          userId: String(ownerDoc._id),
+          authUserId: String(ownerDoc.authUserId || ""),
+          chainAccountId: oldNode.chainAccountId || "Man ID",
+          isManId: true,
+          amount: rewardTaka,
+          fromLevel: previousLevel,
+          toLevel: newLevel,
+          triggeredByOrderNo: orderNo,
+          type: "level_reward",
+          createdAt: new Date(),
+        });
       }
     }
   }
 }
 
-// 'Paid' করা কিন্তু চেইনে না ঢোকা অর্ডারগুলো সিঙ্ক করা
 export async function syncPendingChainOrders() {
   const orders = db.collection("orders");
   const unSyncedOrders = await orders
@@ -254,7 +266,9 @@ export async function syncPendingChainOrders() {
       if (points === 0 && Array.isArray(ord.items)) {
         points = ord.items.reduce(
           (sum, item) =>
-            sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+            sum +
+            Number(item.points || item.point || item.rewardPoints || 0) *
+              Number(item.quantity || item.qty || 1),
           0
         );
       }
@@ -271,7 +285,6 @@ export async function syncPendingChainOrders() {
   }
 }
 
-// ১. অর্ডার তৈরি (POST)
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -308,7 +321,9 @@ export async function POST(req) {
     if (points === 0 && Array.isArray(body.items)) {
       points = body.items.reduce(
         (sum, item) =>
-          sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+          sum +
+          Number(item.points || item.point || item.rewardPoints || 0) *
+            Number(item.quantity || item.qty || 1),
         0
       );
     }
@@ -322,7 +337,8 @@ export async function POST(req) {
       ...body,
       userId,
       profileId: profile ? String(profile._id) : userId,
-      customerName: body.customerName || body.name || profile?.name || current?.authUser?.name || "Customer",
+      customerName:
+        body.customerName || body.name || profile?.name || current?.authUser?.name || "Customer",
       phone: body.phone || body.mobile || profile?.phone || current?.authUser?.mobile || "",
       totalPoints: points,
       points: points,
@@ -350,35 +366,24 @@ export async function POST(req) {
   }
 }
 
-// ২. অর্ডার তালিকা (GET)
-// অ্যাডমিন: সব অর্ডার (চাইলে userId/phone দিয়ে ফিল্টার)। সাধারণ ইউজার: শুধু নিজের অর্ডার।
 export async function GET(req) {
   try {
-    const admin = await requireAdmin(req);
-    const current = admin ? null : await getCurrentUser(req).catch(() => null);
-    if (!admin && !current?.authUser) {
-      return NextResponse.json({ success: false, orders: [], message: "Unauthorized" }, { status: 401 });
-    }
-
     await syncPendingChainOrders().catch(() => null);
-    const orders = db.collection("orders");
-
-    if (!admin) {
-      const ids = [String(current.authUser.id), current.legacy && String(current.legacy._id)].filter(Boolean);
-      const or = [{ userId: { $in: ids } }, { profileId: { $in: ids } }];
-      const ph = current.legacy?.phone || current.authUser?.mobile;
-      if (ph) or.push({ phone: String(ph) }, { mobile: String(ph) });
-      const list = await orders.find({ $or: or }).sort({ createdAt: -1 }).toArray();
-      return NextResponse.json({ success: true, orders: list });
-    }
 
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
     const phone = searchParams.get("phone");
+
+    const orders = db.collection("orders");
+
     if (userId || phone) {
       const orConditions = [];
-      if (userId) orConditions.push({ userId: String(userId) }, { profileId: String(userId) });
-      if (phone) orConditions.push({ phone: String(phone) }, { mobile: String(phone) });
+      if (userId) {
+        orConditions.push({ userId: String(userId) }, { profileId: String(userId) });
+      }
+      if (phone) {
+        orConditions.push({ phone: String(phone) }, { mobile: String(phone) });
+      }
       const list = await orders.find({ $or: orConditions }).sort({ createdAt: -1 }).toArray();
       return NextResponse.json({ success: true, orders: list });
     }
@@ -391,12 +396,8 @@ export async function GET(req) {
   }
 }
 
-// ৩. স্ট্যাটাস আপডেট ও লেভেল/পয়েন্ট/টাকা প্রসেসিং (PATCH)
 export async function PATCH(req) {
   try {
-    if (!(await requireAdmin(req))) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-    }
     const { orderId, orderNo, status, paymentStatus } = await req.json();
     const targetId = orderId || orderNo;
     if (!targetId) {
@@ -407,16 +408,6 @@ export async function PATCH(req) {
     const existing = await orders.findOne(orderQuery(targetId));
     if (!existing) {
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
-    }
-
-    // 🟢 প্যাকেজ চেইনে ঢুকে যাওয়া অর্ডার Cancel/Pending করলে চেইনে ভুতুড়ে নোড থেকে যায়
-    // ("নিজের অর্ডার ০ কিন্তু প্যাকেজ ১" সমস্যা), তাই আটকে দেওয়া হলো
-    const wanted = String(status || "").toLowerCase();
-    if ((existing.pointsProcessedV2 || existing.isPointsProcessed) && ["cancelled", "canceled", "pending"].includes(wanted)) {
-      return NextResponse.json(
-        { success: false, message: "এই অর্ডারের প্যাকেজ চেইনে ঢুকে গেছে, তাই Cancel/Pending করা যাবে না।" },
-        { status: 409 }
-      );
     }
 
     const updateDoc = { updatedAt: new Date() };
@@ -442,7 +433,9 @@ export async function PATCH(req) {
       if (points === 0 && Array.isArray(existing.items)) {
         points = existing.items.reduce(
           (sum, item) =>
-            sum + Number(item.points || item.point || item.rewardPoints || 0) * Number(item.quantity || item.qty || 1),
+            sum +
+            Number(item.points || item.point || item.rewardPoints || 0) *
+              Number(item.quantity || item.qty || 1),
           0
         );
       }
@@ -478,42 +471,23 @@ export async function PATCH(req) {
     return NextResponse.json({ success: true, updated: result.modifiedCount, rewardsApplied });
   } catch (error) {
     console.error("Order update error:", error);
-    return NextResponse.json({ success: false, message: error.message || "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: error.message || "Server error" },
+      { status: 500 }
+    );
   }
 }
 
-// ৪. অর্ডার ডিলিট করা (DELETE)
 export async function DELETE(req) {
   try {
-    if (!(await requireAdmin(req))) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-    }
     const orderId = new URL(req.url).searchParams.get("orderId");
     if (!orderId) {
       return NextResponse.json({ success: false, message: "Order ID is required" }, { status: 400 });
     }
-
-    const orders = db.collection("orders");
-    const existing = await orders.findOne(orderQuery(orderId));
-    if (!existing) {
+    const result = await db.collection("orders").deleteOne(orderQuery(orderId));
+    if (result.deletedCount === 0) {
       return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
     }
-
-    // 🟢 যে অর্ডারের প্যাকেজ চেইনে ঢুকে গেছে সেটা মুছলে চেইনে ভুতুড়ে নোড থেকে যায়
-    // ("নিজের অর্ডার ০ কিন্তু প্যাকেজ ১" সমস্যার কারণ), তাই মুছতে দেওয়া হবে না
-    const orderNo = existing.orderNo || existing.orderId;
-    const inChain = orderNo ? await db.collection("global_chain").countDocuments({ orderNo }) : 0;
-    if (existing.pointsProcessedV2 || inChain > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "এই অর্ডারের প্যাকেজ চেইনে ঢুকে গেছে, তাই মোছা যাবে না।",
-        },
-        { status: 409 }
-      );
-    }
-
-    await orders.deleteOne({ _id: existing._id });
     return NextResponse.json({ success: true, message: "Order deleted successfully" });
   } catch (error) {
     console.error("Order delete error:", error);

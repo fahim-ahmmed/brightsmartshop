@@ -2,35 +2,11 @@ import { NextResponse, after } from "next/server";
 import { ObjectId } from "mongodb";
 import { db } from "@/lib/mongo-client";
 import { getCurrentUser, syncMissingProfiles, TOP_10_FOUNDERS } from "@/lib/current-user";
-import { LEVEL_CONFIG, designationFor } from "@/lib/level-config";
+import { LEVEL_CONFIG, designationFor, evaluateGlobalChain } from "@/lib/level-config";
 
 export const dynamic = "force-dynamic";
 
 const COLORS = ["#3B82F6", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4", "#64748B", "#F97316", "#84CC16"];
-
-function getStepByStepProgress(packagesAfter) {
-  let remaining = Number(packagesAfter || 0);
-  let level = 0;
-  let earnedTaka = 0;
-
-  for (const c of LEVEL_CONFIG) {
-    if (remaining >= c.requiredPackages) {
-      remaining -= c.requiredPackages;
-      level = c.level;
-      earnedTaka += Number(c.taka || 0);
-    } else {
-      break;
-    }
-  }
-
-  const nextCfg = LEVEL_CONFIG.find((c) => c.level === level + 1) || LEVEL_CONFIG[LEVEL_CONFIG.length - 1];
-  return {
-    level,
-    currentStepPackages: remaining,
-    nextLevelTarget: nextCfg ? nextCfg.requiredPackages : 0,
-    earnedTaka,
-  };
-}
 
 async function normalizeAndRecalculateChain() {
   const now = Date.now();
@@ -110,50 +86,29 @@ async function normalizeAndRecalculateChain() {
   }
 
   const allNodes = await chainCol.find({}).sort({ sequenceNo: 1, createdAt: 1 }).toArray();
-  const seenManIdForUser = new Set();
+  const evaluated = evaluateGlobalChain(allNodes);
+
   const bulkOps = [];
   const userBulkOps = [];
 
-  const usersWithPurchasedNodes = new Set();
-  for (const n of allNodes) {
-    if (!n.isSystemFounder) {
-      const uid = String(n.userId || n.phone || "");
-      if (uid) usersWithPurchasedNodes.add(uid);
-    }
-  }
-
-  const suffix = new Array(allNodes.length + 1).fill(0);
-  for (let k = allNodes.length - 1; k >= 0; k--) {
-    suffix[k] = suffix[k + 1] + (allNodes[k].isSystemFounder ? 0 : Number(allNodes[k].packages ?? 1));
-  }
-
   for (let i = 0; i < allNodes.length; i++) {
     const node = allNodes[i];
-    const uid = String(node.userId || node.phone || "");
-
-    let shouldBeManId = false;
-    if (uid && !seenManIdForUser.has(uid)) {
-      if (!node.isSystemFounder || !usersWithPurchasedNodes.has(uid)) {
-        seenManIdForUser.add(uid);
-        shouldBeManId = true;
-      }
-    }
-
-    const packagesAfter = suffix[i + 1];
-    const stepProg = getStepByStepProgress(packagesAfter);
-    const calcLevel = stepProg.level;
+    const sim = evaluated[i];
 
     let fixedAccountId = node.chainAccountId || "";
-    if (shouldBeManId && fixedAccountId.startsWith("P-")) {
+    if (sim.shouldBeManId && fixedAccountId.startsWith("P-")) {
       fixedAccountId = fixedAccountId.replace(/^P-/, "M-");
-    } else if (!shouldBeManId && fixedAccountId.startsWith("M-")) {
+    } else if (!sim.shouldBeManId && fixedAccountId.startsWith("M-")) {
       fixedAccountId = fixedAccountId.replace(/^M-/, "P-");
     }
 
     if (
-      node.isManId !== shouldBeManId ||
-      node.accumulatedPackages !== packagesAfter ||
-      node.currentLevel !== calcLevel ||
+      node.isManId !== sim.shouldBeManId ||
+      node.accumulatedPackages !== sim.rawPackagesAfter ||
+      node.currentStepPackages !== sim.currentStepPackages ||
+      node.extraStepPackages !== sim.extraStepPackages ||
+      node.extraPackagesReceived !== sim.extraPackagesReceived ||
+      node.currentLevel !== sim.level ||
       node.chainAccountId !== fixedAccountId
     ) {
       bulkOps.push({
@@ -161,31 +116,40 @@ async function normalizeAndRecalculateChain() {
           filter: { _id: node._id },
           update: {
             $set: {
-              isManId: shouldBeManId,
+              isManId: sim.shouldBeManId,
               chainAccountId: fixedAccountId,
-              accumulatedPackages: packagesAfter,
-              currentLevel: calcLevel,
+              accumulatedPackages: sim.rawPackagesAfter,
+              mainChainPackagesAfter: sim.mainChainPackagesAfter,
+              currentStepPackages: sim.currentStepPackages,
+              extraStepPackages: sim.extraStepPackages,
+              extraPackagesReceived: sim.extraPackagesReceived,
+              currentLevel: sim.level,
+              mainLevel: sim.mainLevel,
+              extraLevel: sim.extraLevel,
+              earnedTaka: sim.earnedTaka,
             },
           },
         },
       });
-      node.isManId = shouldBeManId;
-      node.chainAccountId = fixedAccountId;
-      node.accumulatedPackages = packagesAfter;
-      node.currentLevel = calcLevel;
     }
 
-    if (shouldBeManId && !node.isSystemFounder && ObjectId.isValid(node.userId)) {
+    if (sim.shouldBeManId && !node.isSystemFounder && ObjectId.isValid(node.userId)) {
       userBulkOps.push({
         updateOne: {
           filter: { _id: new ObjectId(node.userId) },
           update: {
             $set: {
-              level: calcLevel,
-              currentLevel: calcLevel,
-              designation: designationFor(calcLevel),
-              accumulatedPackages: packagesAfter,
-              walletBalance: stepProg.earnedTaka,
+              level: sim.level,
+              currentLevel: sim.level,
+              mainLevel: sim.mainLevel,
+              extraLevel: sim.extraLevel,
+              designation: sim.designation,
+              accumulatedPackages: sim.rawPackagesAfter,
+              mainChainPackagesAfter: sim.mainChainPackagesAfter,
+              currentStepPackages: sim.currentStepPackages,
+              extraStepPackages: sim.extraStepPackages,
+              extraPackagesReceived: sim.extraPackagesReceived,
+              walletBalance: sim.earnedTaka,
             },
           },
         },
@@ -246,7 +210,6 @@ async function getCategoryGroups() {
 
 export async function GET(req) {
   try {
-    // প্রথমবার বা নতুন ইউজারের ক্ষেত্রে সাথে সাথে সিঙ্ক নিশ্চিত করা
     await syncMissingProfiles().catch(() => null);
     try {
       after(runMaintenance);
@@ -319,21 +282,15 @@ export async function GET(req) {
     const allProfileIds = matchingProfiles.map((p) => String(p._id));
     const ownerIds = [...new Set([profileId, authId, paramUserId, ...allProfileIds].filter(Boolean))];
 
-    // 🟢 ইউজারের পার্মানেন্ট BSS- আইডি নিশ্চিত করা
     const rawCode = String(legacy?.referralCode || legacy?.customerId || "BSS-20260011");
     const finalPermanentId = rawCode.toUpperCase().startsWith("BSS-")
       ? rawCode.toUpperCase()
       : `BSS-${rawCode}`;
     const shortCodeWithoutPrefix = finalPermanentId.replace(/^BSS-/i, "");
 
-    const nodeQuery = { $or: [{ userId: { $in: ownerIds } }, { authUserId: { $in: ownerIds } }] };
-    if (userPhone) nodeQuery.$or.push({ phone: userPhone });
-    if (legacy?.name) nodeQuery.$or.push({ userName: legacy.name });
-
     const orderQuery = { $or: [{ userId: { $in: ownerIds } }, { profileId: { $in: ownerIds } }] };
     if (userPhone) orderQuery.$or.push({ phone: userPhone });
 
-    // 🟢 স্পন্সর লিস্টের জন্য নতুন BSS- আইডি, পুরাতন কোড, ফোন বা মঙ্গো আইডি সবকিছু দিয়েই ম্যাচ করা যাতে আগের কোনো টেস্ট স্পন্সর মিস না হয়
     const sponsorMatchTargets = [
       finalPermanentId,
       shortCodeWithoutPrefix,
@@ -341,8 +298,8 @@ export async function GET(req) {
       ...(userPhone ? [userPhone] : []),
     ].filter(Boolean);
 
-    const [nodes, userOrders, sponsorListRaw, grouped] = await Promise.all([
-      db.collection("global_chain").find(nodeQuery).sort({ sequenceNo: 1 }).toArray(),
+    const [allChainNodes, userOrders, sponsorListRaw, grouped] = await Promise.all([
+      db.collection("global_chain").find({}).sort({ sequenceNo: 1, createdAt: 1 }).toArray(),
       db.collection("orders").find(orderQuery).sort({ createdAt: -1 }).toArray(),
       usersCol
         .find({
@@ -358,23 +315,42 @@ export async function GET(req) {
       getCategoryGroups(),
     ]);
 
-    const ownedNodes = nodes.filter((n) => !n.isSystemFounder);
-    const ownPackages = ownedNodes.length;
-    const primaryOwnedNode = ownedNodes[0] || null;
+    const evaluatedChain = evaluateGlobalChain(allChainNodes);
+    const ownerIdSet = new Set(ownerIds.map(String));
 
-    let packagesInNetwork = 0;
-    if (primaryOwnedNode) {
-      packagesInNetwork = await db.collection("global_chain").countDocuments({
-        sequenceNo: { $gt: primaryOwnedNode.sequenceNo },
-        isSystemFounder: { $ne: true },
-      });
-    }
+    const myEvaluatedNodes = evaluatedChain.filter((st, idx) => {
+      const rawNode = allChainNodes[idx];
+      if (rawNode.isSystemFounder) return false;
+      const matchId =
+        ownerIdSet.has(String(rawNode.userId || "")) ||
+        ownerIdSet.has(String(rawNode.authUserId || ""));
+      const matchPhone = userPhone && String(rawNode.phone || "") === String(userPhone);
+      const matchName = legacy?.name && rawNode.userName === legacy.name;
+      return matchId || matchPhone || matchName;
+    });
 
-    const stepProgress = getStepByStepProgress(packagesInNetwork);
-    const level = stepProgress.level;
-    const currentStepPackages = stepProgress.currentStepPackages;
-    const nextLevelTarget = stepProgress.nextLevelTarget;
-    const walletBalance = stepProgress.earnedTaka;
+    const ownPackages = myEvaluatedNodes.length;
+    const primarySim = myEvaluatedNodes[0] || null;
+
+    const packagesInNetwork = primarySim ? primarySim.rawPackagesAfter : 0;
+    const mainChainPackagesAfter = primarySim ? primarySim.mainChainPackagesAfter : 0;
+    const extraPackagesReceived = primarySim ? primarySim.extraPackagesReceived : 0;
+    const level = primarySim ? primarySim.level : 0;
+    const mainLevel = primarySim ? primarySim.mainLevel : 0;
+    const extraLevel = primarySim ? primarySim.extraLevel : 9;
+    const currentStepPackages = primarySim ? primarySim.currentStepPackages : 0;
+    const nextLevelTarget = primarySim
+      ? primarySim.nextLevelTarget
+      : LEVEL_CONFIG[0].requiredPackages;
+
+    // 🟢 শুধুমাত্র লেভেল ৯ বা তার ওপরে উঠলে এক্সট্রা প্যাকেজ কার্ডের ডাটা সক্রিয় হবে
+    const isExtraStage = primarySim ? Boolean(primarySim.isExtraStage) : false;
+    const extraTargetLevel = primarySim ? primarySim.extraTargetLevel : 10;
+    const extraStepPackages = primarySim ? primarySim.extraStepPackages : 0;
+    const extraNextLevelTarget = primarySim ? primarySim.extraNextLevelTarget : 10;
+    const extraPackagesNeeded = primarySim ? primarySim.extraPackagesNeeded : 10;
+
+    const walletBalance = primarySim ? primarySim.earnedTaka : 0;
 
     if (
       legacy &&
@@ -393,9 +369,15 @@ export async function GET(req) {
               referralCode: finalPermanentId,
               level,
               currentLevel: level,
+              mainLevel,
+              extraLevel,
               designation: designationFor(level),
               walletBalance,
               accumulatedPackages: packagesInNetwork,
+              mainChainPackagesAfter,
+              currentStepPackages,
+              extraStepPackages,
+              extraPackagesReceived,
               totalPackages: ownPackages,
             },
           }
@@ -403,7 +385,6 @@ export async function GET(req) {
         .catch(() => null);
     }
 
-    // 🟢 আমাকে কে রেফার করেছে (Sponsor Code ও Sponsor Name) খুঁজে বের করা
     const myRawSponsor = String(
       legacy?.sponsorCode || legacy?.sponsorId || legacy?.referredBy || authUser?.sponsorCode || ""
     ).trim();
@@ -427,7 +408,9 @@ export async function GET(req) {
       const spDoc = await usersCol.findOne({ $or: spOr });
       if (spDoc) {
         const spCode = String(spDoc.referralCode || spDoc.customerId || bssSp);
-        mySponsorCode = spCode.toUpperCase().startsWith("BSS-") ? spCode.toUpperCase() : `BSS-${spCode}`;
+        mySponsorCode = spCode.toUpperCase().startsWith("BSS-")
+          ? spCode.toUpperCase()
+          : `BSS-${spCode}`;
         mySponsorName = spDoc.name || "";
       } else {
         mySponsorCode = bssSp;
@@ -486,11 +469,20 @@ export async function GET(req) {
       },
       stats: {
         currentLevel: level,
+        mainLevel: mainLevel,
+        extraLevel: extraLevel,
         designation: designationFor(level),
         accumulatedPackages: packagesInNetwork,
+        mainChainPackagesAfter: mainChainPackagesAfter,
+        extraPackagesReceived: extraPackagesReceived,
+        isExtraStage: isExtraStage,
         currentStepPackages: currentStepPackages,
-        newPurchasersAfterMe: packagesInNetwork * 40,
         nextLevelTarget: nextLevelTarget,
+        extraTargetLevel: extraTargetLevel,
+        extraStepPackages: extraStepPackages,
+        extraNextLevelTarget: extraNextLevelTarget,
+        extraPackagesNeeded: extraPackagesNeeded,
+        newPurchasersAfterMe: packagesInNetwork * 40,
         walletBalance: walletBalance,
         totalOrders: validOrders.length,
         reservePoints: reservePoints,
@@ -499,36 +491,34 @@ export async function GET(req) {
         totalSponsors: sponsorList.length,
         sponsorsList: sponsorList,
       },
-      myChainNodes: await Promise.all(
-        ownedNodes.map(async (n, idx) => {
-          const isFirstNode = idx === 0;
-          let nodePackagesAfter = 0;
-          if (isFirstNode) {
-            nodePackagesAfter = packagesInNetwork;
-          } else {
-            nodePackagesAfter = await db.collection("global_chain").countDocuments({
-              sequenceNo: { $gt: n.sequenceNo },
-              isSystemFounder: { $ne: true },
-            });
-          }
-          const nodeStep = getStepByStepProgress(nodePackagesAfter);
-          return {
-            _id: String(n._id),
-            sequenceNo: n.sequenceNo,
-            chainAccountId: n.chainAccountId || (isFirstNode ? `M-${finalPermanentId}` : `P-${n.sequenceNo}`),
-            isManId: isFirstNode,
-            accumulatedPackages: nodePackagesAfter,
-            currentStepPackages: nodeStep.currentStepPackages,
-            currentLevel: nodeStep.level,
-            designation: designationFor(nodeStep.level),
-            createdAt: n.createdAt,
-          };
-        })
-      ),
+      myChainNodes: myEvaluatedNodes.map((sim, idx) => {
+        const rawNode = allChainNodes[sim.index];
+        const isFirstNode = idx === 0;
+        return {
+          _id: String(rawNode._id),
+          sequenceNo: rawNode.sequenceNo,
+          chainAccountId:
+            rawNode.chainAccountId ||
+            (isFirstNode ? `M-${finalPermanentId}` : `P-${rawNode.sequenceNo}`),
+          isManId: isFirstNode,
+          accumulatedPackages: sim.rawPackagesAfter,
+          mainChainPackagesAfter: sim.mainChainPackagesAfter,
+          currentStepPackages: sim.currentStepPackages,
+          extraStepPackages: sim.extraStepPackages,
+          extraPackagesReceived: sim.extraPackagesReceived,
+          currentLevel: sim.level,
+          mainLevel: sim.mainLevel,
+          designation: sim.designation,
+          createdAt: rawNode.createdAt,
+        };
+      }),
       recentOrders: userOrders.slice(0, 10),
       sponsorList,
       categoryStats,
-      levelTable: LEVEL_CONFIG.map((c) => ({ ...c, requiredNewPurchasers: c.requiredPackages })),
+      levelTable: LEVEL_CONFIG.map((c) => ({
+        ...c,
+        requiredNewPurchasers: c.requiredPackages,
+      })),
     });
   } catch (error) {
     console.error("[dashboard-stats]", error);

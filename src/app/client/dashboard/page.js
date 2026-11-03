@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import DashboardSidebar from "@/components/layout/DashboardSidebar";
+import { LEVEL_CONFIG } from "@/lib/level-config";
 
 export default function ClientDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const lastFetchKeyRef = useRef(null);
 
-  // Better Auth Live Session Hook
   const { data: session } = authClient?.useSession
     ? authClient.useSession()
     : { data: null };
@@ -29,12 +29,10 @@ export default function ClientDashboardPage() {
       "";
     const email = session?.user?.email || localUser?.email || "";
 
-    // 🟢 একই ইউজারের জন্য দুইবার ফেচ করা বন্ধ (সেশন পরে লোড হলেও আবার ফেচ হবে না)
     const fetchKey = userId || "anon";
     if (lastFetchKeyRef.current === fetchKey) return;
     lastFetchKeyRef.current = fetchKey;
 
-    // 🟢 আগে দেখা তথ্য সাথে সাথে দেখানো (এই ট্যাবের সেশনে), নতুন তথ্য এলে বদলে যাবে
     const cacheKey = userId ? `bss_dash_${userId}` : "";
     if (cacheKey) {
       try {
@@ -78,14 +76,18 @@ export default function ClientDashboardPage() {
     typeof window !== "undefined" ? localStorage.getItem("bright_user") : null;
   const localUser = localUserRaw ? JSON.parse(localUserRaw) : null;
 
-  // 🟢 ব্যাকএন্ডের পার্মানেন্ট আইডিকে সর্বোচ্চ অগ্রাধিকার দেওয়া হয়েছে
   const user = {
     name:
       data?.user?.name ||
       session?.user?.name ||
       localUser?.name ||
       "Md Fahim Ahammad Shihab",
-    id: data?.user?.id || localUser?.referralCode || localUser?.id || "20260048",
+    id:
+      data?.user?.referralCode ||
+      data?.user?.id ||
+      localUser?.referralCode ||
+      localUser?.id ||
+      "BSS-20260001",
     email:
       data?.user?.email ||
       session?.user?.email ||
@@ -100,10 +102,20 @@ export default function ClientDashboardPage() {
 
   const stats = data?.stats || {
     currentLevel: 0,
-    designation: "No Level",
+    mainLevel: 0,
+    extraLevel: 9,
+    designation: "New Member",
     newPurchasersAfterMe: 0,
     accumulatedPackages: 0,
+    mainChainPackagesAfter: 0,
     currentStepPackages: 0,
+    nextLevelTarget: 3,
+    isExtraStage: false,
+    extraTargetLevel: 10,
+    extraStepPackages: 0,
+    extraNextLevelTarget: 10,
+    extraPackagesNeeded: 10,
+    extraPackagesReceived: 0,
     walletBalance: 0,
     totalOrders: 0,
     reservePoints: 0,
@@ -115,63 +127,34 @@ export default function ClientDashboardPage() {
   const myChainNodes = data?.myChainNodes || [];
   const recentOrders = data?.recentOrders || [];
 
-  const levelRequirements = [
-    { level: 1, required: 3, designation: "Preferred Customer" },
-    { level: 2, required: 5, designation: "Preferred Customer" },
-    { level: 3, required: 9, designation: "Preferred Customer" },
-    { level: 4, required: 16, designation: "Preferred Customer" },
-    { level: 5, required: 33, designation: "General Customer" },
-    { level: 6, required: 65, designation: "General Customer" },
-    { level: 7, required: 129, designation: "General Customer" },
-    { level: 8, required: 257, designation: "General Customer" },
-    { level: 9, required: 513, designation: "General Customer" },
-    { level: 10, required: 1025, designation: "Regular Customer" },
-    { level: 11, required: 2049, designation: "Regular Customer" },
-    { level: 12, required: 4097, designation: "Regular Customer" },
-    { level: 13, required: 8193, designation: "Regular Customer" },
-    { level: 14, required: 16385, designation: "Regular Customer" },
-    { level: 15, required: 32769, designation: "Special Customer" },
-    { level: 16, required: 65537, designation: "Special Customer" },
-    { level: 17, required: 131073, designation: "Silver Customer" },
-    { level: 18, required: 262145, designation: "Silver Customer" },
-    { level: 19, required: 524289, designation: "Gold Customer" },
-    { level: 20, required: 1048577, designation: "Gold Customer" },
-    { level: 21, required: 2097153, designation: "Diamond Customer" },
-    { level: 22, required: 4194305, designation: "Platinum Customer" },
-    { level: 23, required: 8388609, designation: "Royal Customer" },
-    { level: 24, required: 16777217, designation: "Crown Customer" },
-  ];
+  const totalPackagesAfterMe = Number(stats.accumulatedPackages || 0);
+  const currentLevel = Number(stats.currentLevel || 0);
+  const mainLevel = Number(stats.mainLevel ?? currentLevel);
+  const currentDesignation = stats.designation || "New Member";
 
-  // ১. মেইন আইডির পর মোট কতগুলো প্যাকেজ সেল হয়েছে
-  const totalPackagesAfterMe =
-    stats.accumulatedPackages !== undefined
-      ? stats.accumulatedPackages
-      : Math.floor((stats.newPurchasersAfterMe || 0) / 40);
+  // 🟢 শুধুমাত্র ইউজার যখন লেভেল ৯ বা তার ওপরে উঠবে, তখনই Extra Package কার্ড দেখাবে
+  const showExtraPackageCard = Boolean(stats.isExtraStage || currentLevel >= 9 || mainLevel >= 9);
 
-  // ২. নতুন নিয়ম: আগের লেভেলগুলোর প্যাকেজ বাদ দিয়ে ধাপে ধাপে বর্তমান লেভেল ও নতুন টার্গেট হিসাব করা
-  let remainingForStep = totalPackagesAfterMe;
-  let calculatedLevel = 0;
-  let currentDesignation = "New Member";
-
-  for (const row of levelRequirements) {
-    if (remainingForStep >= row.required) {
-      remainingForStep -= row.required;
-      calculatedLevel = row.level;
-      currentDesignation = row.designation;
-    } else {
-      break;
-    }
-  }
-
-  const currentLevel = calculatedLevel;
-  const currentStepPackages =
-    stats.currentStepPackages !== undefined ? stats.currentStepPackages : remainingForStep;
-
-  const nextLevelObj =
-    levelRequirements.find((r) => r.level === currentLevel + 1) ||
-    levelRequirements[levelRequirements.length - 1];
-  const nextLevelTargetPackages = nextLevelObj.required;
+  // মেইন চেইন প্রগ্রেস (লেভেল ১ থেকে ২৪ পর্যন্ত একটানা চলবে)
+  const nextMainLevelObj =
+    LEVEL_CONFIG.find((r) => r.level === mainLevel + 1) ||
+    LEVEL_CONFIG[LEVEL_CONFIG.length - 1];
+  const nextLevelTargetPackages = Number(
+    stats.nextLevelTarget || nextMainLevelObj.requiredPackages || 3
+  );
+  const currentStepPackages = Number(stats.currentStepPackages || 0);
   const packagesNeededForNextLevel = Math.max(0, nextLevelTargetPackages - currentStepPackages);
+
+  // এক্সট্রা প্যাকেজ প্রগ্রেস (লেভেল ৯+ এর জন্য)
+  const extraTargetLevel = Number(stats.extraTargetLevel || Math.min(24, Math.max(10, currentLevel + 1)));
+  const extraStepPackages = Number(stats.extraStepPackages || 0);
+  const extraNextLevelTarget = Number(stats.extraNextLevelTarget || 10);
+  const extraPackagesNeeded = Math.max(0, extraNextLevelTarget - extraStepPackages);
+  const extraPackagesReceived = Number(stats.extraPackagesReceived || 0);
+  const extraProgressPercent = Math.min(
+    100,
+    (extraStepPackages / (extraNextLevelTarget || 1)) * 100
+  );
 
   const reservePoints = Number(stats.reservePoints || 0);
   const pointsNeeded = 40 - (reservePoints % 40);
@@ -217,14 +200,14 @@ export default function ClientDashboardPage() {
     {
       label: "Network Packages",
       value: totalPackagesAfterMe.toString(),
-      subtext: `নতুন ধাপে জমা: ${currentStepPackages} / ${nextLevelTargetPackages} (Level ${Math.min(24, currentLevel + 1)} এর জন্য)`,
+      subtext: `মেইন চেইন ধাপে জমা: ${currentStepPackages} / ${nextLevelTargetPackages} (Level ${Math.min(24, mainLevel + 1)})`,
       icon: "👥",
       bg: "bg-[#F3E8FF] text-purple-900 border-[#E9D5FF]",
     },
     {
       label: currentDesignation,
       value: `Level ${currentLevel < 10 ? `0${currentLevel}` : currentLevel}`,
-      subtext: `পরবর্তী লেভেলের জন্য নতুন আরো ${packagesNeededForNextLevel} টি প্যাকেজ প্রয়োজন`,
+      subtext: `পরবর্তী মেইন ধাপের জন্য আরো ${packagesNeededForNextLevel} টি প্যাকেজ প্রয়োজন`,
       icon: "🏆",
       bg: "bg-[#FFFBE6] text-amber-900 border-[#FFF5C2]",
     },
@@ -307,7 +290,46 @@ export default function ClientDashboardPage() {
           </div>
         </div>
 
-        {/* Reserve Points & Level Tracker Dual Grid */}
+        {/* 🟢 EXTRA PACKAGE TOP CARD: শুধুমাত্র যে ব্যক্তি লেভেল ৯ বা তার ওপরে উঠবে, তার ড্যাশবোর্ডের একদম ওপরে এই কার্ডটি ভেসে উঠবে */}
+        {showExtraPackageCard && (
+          <div className="bg-gradient-to-r from-amber-900 via-orange-900 to-amber-950 text-white p-6 rounded-3xl border border-amber-400/40 shadow-lg space-y-3">
+            <div className="flex flex-wrap justify-between items-center gap-2 text-xs font-extrabold">
+              <span className="text-amber-300 uppercase tracking-widest flex items-center gap-1.5">
+                <span>⚡ EXTRA PACKAGE (এক্সট্রা প্যাকেজ লাগবে - LEVEL {extraTargetLevel})</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-500/20 border border-amber-400/40 text-amber-200 px-3 py-1 rounded-full">
+                  জমা হয়েছে: {extraStepPackages} / {extraNextLevelTarget} Extra Pkg
+                </span>
+                <span className="bg-white/10 border border-white/20 text-white px-3 py-1 rounded-full">
+                  মোট প্রাপ্ত ফান্ড: {extraPackagesReceived} Pkg
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-amber-100 leading-relaxed">
+              আপনি লেভেল ৯ অতিক্রম করেছেন! পরবর্তী{" "}
+              <span className="text-white font-black">Level {extraTargetLevel}</span> কমপ্লিট করার
+              জন্য আপনার ম্যান আইডির আন্ডারে মোট{" "}
+              <span className="text-amber-300 font-black text-sm">
+                {extraNextLevelTarget} টি এক্সট্রা প্যাকেজ
+              </span>{" "}
+              প্রয়োজন (বর্তমানে জমা আছে{" "}
+              <span className="text-emerald-300 font-black">{extraStepPackages} টি</span>, আর{" "}
+              <span className="text-white font-black underline">
+                {extraPackagesNeeded} টি এক্সট্রা প্যাকেজ
+              </span>{" "}
+              লাগবে)।
+            </p>
+            <div className="w-full h-3 bg-slate-950/70 rounded-full border border-amber-700 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 via-orange-400 to-emerald-400 rounded-full transition-all duration-500"
+                style={{ width: `${extraProgressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Reserve Points & Main Chain Level Tracker Dual Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 text-white p-6 rounded-3xl border border-emerald-400/30 shadow-md space-y-3">
             <div className="flex justify-between items-center text-xs font-extrabold">
@@ -336,10 +358,10 @@ export default function ClientDashboardPage() {
           <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white p-6 rounded-3xl border border-emerald-500/30 shadow-md space-y-3">
             <div className="flex justify-between items-center text-xs font-extrabold">
               <span className="text-emerald-400 uppercase tracking-widest">
-                🎯 NEW PACKAGES TRACKER (YOUR LEVEL {currentLevel})
+                🎯 NEW PACKAGES TRACKER (MAIN CHAIN LEVEL {mainLevel})
               </span>
               <span className="text-gray-300">
-                New Target: {currentStepPackages} / {nextLevelTargetPackages} Packages
+                Target: {currentStepPackages} / {nextLevelTargetPackages} Packages
               </span>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
@@ -347,7 +369,7 @@ export default function ClientDashboardPage() {
               <span className="text-emerald-400 font-black text-sm">
                 {totalPackagesAfterMe} টি
               </span>{" "}
-              প্যাকেজ সেল হয়েছে। পরবর্তী লেভেলের (Level {Math.min(24, currentLevel + 1)}) জন্য নতুন{" "}
+              প্যাকেজ সেল হয়েছে। মেইন চেইনের পরবর্তী লেভেলের (Level {Math.min(24, mainLevel + 1)}) জন্য নতুন{" "}
               <span className="text-amber-300 font-black">
                 {currentStepPackages}/{nextLevelTargetPackages} টি
               </span>{" "}
@@ -397,7 +419,65 @@ export default function ClientDashboardPage() {
         </div>
 
         {/* Chain Nodes List */}
-        
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+            <div>
+              <span className="text-[10px] font-black text-[#00875A] uppercase tracking-widest block">
+                GLOBAL CHAIN ACCOUNTS (40 PTS = 1 ID)
+              </span>
+              <h3 className="text-lg font-bold text-gray-900">
+                আমার মেইন আইডি ও প্রোডাক্ট আইডি তালিকা ({myChainNodes.length} টি)
+              </h3>
+            </div>
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+              রিজার্ভ জমা: {reservePoints} Pts (আর {pointsNeeded} Pts হলে নতুন আইডি)
+            </span>
+          </div>
+
+          {myChainNodes.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {myChainNodes.map((node, index) => (
+                <div
+                  key={node._id || index}
+                  className={`p-4 rounded-2xl border flex items-center justify-between ${
+                    node.isManId
+                      ? "bg-emerald-50/70 border-emerald-300"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <div>
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
+                        node.isManId
+                          ? "bg-[#00875A] text-white"
+                          : "bg-amber-500 text-white"
+                      }`}
+                    >
+                      {node.isManId ? "Main ID (M)" : "Product ID (P)"}
+                    </span>
+                    <div className="text-base font-black text-gray-900 mt-1.5 font-mono">
+                      {node.chainAccountId}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-extrabold text-[#00875A]">
+                      Level {node.currentLevel || 0}
+                    </div>
+                    <div className="text-[10px] text-gray-500 font-bold">
+                      {node.accumulatedPackages || 0} Pkg
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-xs text-gray-500 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+              আপনার এখনো ৪০ পয়েন্ট পূর্ণ হয়নি (বর্তমান রিজার্ভ পয়েন্ট:{" "}
+              <strong className="text-[#00875A]">{reservePoints} Pts</strong>)। ৪০ পয়েন্ট পূর্ণ
+              হলেই এখানে আপনার <strong>Main ID / Product ID</strong> দেখা যাবে।
+            </div>
+          )}
+        </div>
 
         {/* Live Inventory Mix & Category Performance Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
