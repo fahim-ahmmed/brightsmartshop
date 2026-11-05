@@ -7,6 +7,7 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  output: 'standalone',
   serverExternalPackages: ['mongoose'],
   experimental: {
     serverActions: {
@@ -19,22 +20,30 @@ const nextConfig = {
         '127.0.0.1:3001',
         '127.0.0.1:3002',
         '*.vercel.app',
+        'brightsmartshop24.com',
+        'www.brightsmartshop24.com',
+        'www.bss24.shop',
+        'bss24.shop',
       ],
     },
   },
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
       {
         protocol: 'https',
         hostname: 'www.brightsmartshop24.com',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.bss24.shop',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'bss24.shop',
         pathname: '/storage/**',
       },
     ],
@@ -45,14 +54,8 @@ const nextConfig = {
   // সিক্রেট অ্যাডমিন রুট রিরাইটস (Domain/219192026 -> /admin)
   async rewrites() {
     return [
-      {
-        source: '/219192026/:path*',
-        destination: '/admin/:path*',
-      },
-      {
-        source: '/219192026',
-        destination: '/admin',
-      },
+      { source: '/219192026/:path*', destination: '/admin/:path*' },
+      { source: '/219192026', destination: '/admin' },
     ];
   },
 };

@@ -18,7 +18,7 @@ export const LEVEL_CONFIG = [
   { level: 14, requiredPackages: 24576, extraPackages: 100, taka: 7000, designation: "Regular Customer" },
   { level: 15, requiredPackages: 49152, extraPackages: 150, taka: 12000, designation: "Special Customer" },
   { level: 16, requiredPackages: 98304, extraPackages: 230, taka: 20000, designation: "Special Customer" },
-  { level: 17, requiredPackages: 194608, extraPackages: 400, taka: 30000, designation: "Silver Customer" },
+  { level: 17, requiredPackages: 196608, extraPackages: 400, taka: 30000, designation: "Silver Customer" },
   { level: 18, requiredPackages: 393216, extraPackages: 500, taka: 45000, designation: "Silver Customer" },
   { level: 19, requiredPackages: 786432, extraPackages: 750, taka: 70000, designation: "Gold Customer" },
   { level: 20, requiredPackages: 1572864, extraPackages: 1200, taka: 100000, designation: "Gold Customer" },
