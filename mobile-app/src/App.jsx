@@ -21,39 +21,49 @@ import TrackOrder from './screens/TrackOrder.jsx'
 
 const hideChromeRoutes = ['/login', '/register']
 
-// Wrapper renders CartPopulated or CartEmpty based on cart state
 function CartRoute() {
   const { cart } = useApp()
   return cart.length > 0 ? <CartPopulated /> : <CartEmpty />
+}
+
+function ProtectedRoute({ children }) {
+  const { user } = useApp()
+  const location = useLocation()
+  if (!user) {
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />
+  }
+  return children
 }
 
 export default function App() {
   const { user } = useApp()
   const location = useLocation()
   const hideChrome = hideChromeRoutes.includes(location.pathname)
-  const requiresAuth = !user && [
-    '/me', '/dashboard', '/orders', '/track', '/checkout',
-  ].some(p => location.pathname.startsWith(p))
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col max-w-md mx-auto shadow-sm">
       {hideChrome ? null : <Header />}
-      <main className={`flex-1 ${hideChrome ? '' : 'pb-20'}`}>
+      <main className={`flex-1 ${hideChrome ? '' : 'pb-24'}`}>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-          <Route path="/register" element={user ? <Navigate to="/" /> : <Register />} />
+          {/* অ্যাপ ওপেন করলেই সরাসরি Home পেজ দেখাবে */}
           <Route path="/" element={<Home />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/category/:name" element={<CategoryProducts />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/cart" element={<CartRoute />} />
           <Route path="/wishlist" element={<Wishlist />} />
-          <Route path="/checkout" element={requiresAuth ? <Navigate to="/login" /> : <Checkout />} />
-          <Route path="/me" element={user ? <MeHub /> : <Navigate to="/login" />} />
-          <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-          <Route path="/orders" element={user ? <MyOrders /> : <Navigate to="/login" />} />
-          <Route path="/track/:orderNo" element={user ? <TrackOrder /> : <Navigate to="/login" />} />
-          <Route path="*" element={<Navigate to="/" />} />
+
+          {/* লগইন ও রেজিস্টার */}
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+          <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+
+          {/* পারচেজ (Checkout) বা প্রোফাইল/ড্যাশবোর্ডে গেলে লগইন না থাকলে লগইন চাবে */}
+          <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+          <Route path="/me" element={<ProtectedRoute><MeHub /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
+          <Route path="/track/:orderNo" element={<ProtectedRoute><TrackOrder /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       {hideChrome ? null : <BottomNav />}

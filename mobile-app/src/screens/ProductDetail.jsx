@@ -1,100 +1,126 @@
 import React, { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
+import { ChevronLeft, Heart } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import QuantitySelector from '../components/QuantitySelector.jsx'
+import { resolveImageUrl } from '../api/index.js'
 
 export default function ProductDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { products, addToCart, toggleWishlist, isWishlisted } = useApp()
+  const { user, products, addToCart, toggleWishlist, isWishlisted } = useApp()
   const product = products.find(p => String(p._id) === String(id))
   const [qty, setQty] = useState(1)
 
   if (!product) {
     return (
       <div className="px-4 py-16 text-center">
-        <p className="text-slate-500">Product not found.</p>
-        <button onClick={() => navigate('/')} className="btn-outline mt-4 inline-block">Back to home</button>
+        <p className="text-slate-500 text-sm">Product not found.</p>
+        <button onClick={() => navigate('/')} className="btn-outline mt-4">Back to home</button>
       </div>
     )
   }
 
   const wished = isWishlisted(product._id)
-  const imageUrl = product.image
-    ? String(product.image).startsWith('http')
-      ? product.image
-      : `https://brightsmartshop24.com${product.image.startsWith('/') ? '' : '/'}${product.image}`
-    : 'https://placehold.co/400x400/E8F5E9/007A4D?text=BSS'
+  const imageUrl = resolveImageUrl(product.image) || 'https://placehold.co/400x320/E8F5E9/007A4D?text=Bright+Smart+Shop'
+
+  const handleBuyNow = () => {
+    addToCart(product, qty)
+    if (!user) {
+      navigate('/login?redirect=/checkout')
+    } else {
+      navigate('/checkout')
+    }
+  }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} aria-label="Back"><ArrowLeft size={22} /></button>
-        <h1 className="text-sm font-semibold text-slate-800 flex-1 truncate">Product details</h1>
-      </header>
+    <div className="px-4 py-3 space-y-4">
+      {/* Sub-header */}
+      <button
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-1 text-sm font-extrabold text-slate-800"
+      >
+        <ChevronLeft size={18} /> Product details
+      </button>
 
-      <div className="flex-1 px-4 py-4 space-y-4">
-        <div className="relative">
+      <div className="bg-white rounded-3xl border border-slate-100 p-3.5 shadow-xs space-y-4">
+        {/* Product Image */}
+        <div className="relative rounded-2xl overflow-hidden bg-slate-50">
           <img
             src={imageUrl}
             alt={product.title}
-            className="w-full aspect-square object-cover rounded-2xl bg-slate-100"
-            onError={(e) => { e.target.src = 'https://placehold.co/400x400/E8F5E9/007A4D?text=BSS' }}
+            className="w-full aspect-[4/3] object-cover"
+            onError={(e) => { e.target.src = 'https://placehold.co/400x320/E8F5E9/007A4D?text=Bright+Smart+Shop' }}
           />
           <button
             onClick={() => toggleWishlist(product)}
-            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-sm"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/95 flex items-center justify-center shadow-sm"
             aria-label="Toggle wishlist"
           >
-            <Heart size={20} className={wished ? 'fill-brand-orange text-brand-orange' : 'text-slate-400'} />
+            <Heart size={18} className={wished ? 'fill-rose-500 text-rose-500' : 'text-rose-500'} />
           </button>
+          <span className="absolute bottom-2.5 right-3 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            1 / 1
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="badge bg-brand-green-light text-brand-green">{product.categoryName || product.category}</span>
-          <span className="badge bg-emerald-100 text-emerald-700">In stock</span>
-          <span className="text-xs text-slate-400">{product.unit || '1 Pcs'}</span>
+        {/* Category & Stock Row */}
+        <div className="flex items-center justify-between">
+          <span className="bg-[#E8F5E9] text-[#006E32] text-[11px] font-extrabold uppercase px-3 py-1 rounded-full">
+            {product.categoryName || product.category || 'PACKAGE'}
+          </span>
+          <span className="text-xs font-semibold text-[#006E32]">
+            In stock · <span className="text-slate-400 font-normal">{product.stock || 100} available</span>
+          </span>
         </div>
 
-        <h2 className="text-lg font-bold text-slate-800 leading-tight">{product.title}</h2>
+        {/* Title */}
+        <h1 className="text-base font-extrabold text-slate-900 leading-snug">
+          {product.title}
+        </h1>
 
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-brand-green">৳{product.price}</span>
-          {product.originalPrice && product.originalPrice > product.price && (
-            <span className="text-sm text-slate-400 line-through">৳{product.originalPrice}</span>
-          )}
-          {product.points > 0 && (
-            <span className="badge bg-orange-100 text-brand-orange ml-1">+{product.points} Pts</span>
-          )}
+        {/* Price, Points & Unit */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl font-black text-[#006E32]">৳{product.price}</span>
+            {Number(product.points) > 0 && (
+              <span className="bg-[#E8F5E9] text-[#006E32] text-xs font-extrabold px-3 py-1 rounded-full">
+                +{product.points} Pts
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-slate-400 font-semibold">{product.unit || '1 Pcs'}</span>
         </div>
 
-        <div>
-          <p className="text-sm font-medium text-slate-700 mb-2">Quantity</p>
+        {/* Quantity Row */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <span className="text-xs font-bold text-slate-700">Quantity</span>
           <QuantitySelector value={qty} onChange={setQty} />
         </div>
 
-        {product.description && (
-          <div>
-            <p className="text-sm font-medium text-slate-700 mb-1">Description</p>
-            <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{product.description}</p>
-          </div>
-        )}
-      </div>
+        {/* About this package / product */}
+        <div className="pt-2 border-t border-slate-100">
+          <h3 className="text-xs font-extrabold text-slate-800 mb-1">About this package</h3>
+          <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">
+            {product.description || 'Everyday family essentials in one package with guaranteed quality and reward points.'}
+          </p>
+        </div>
 
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-3 flex gap-3 z-20">
-        <button
-          onClick={() => { addToCart(product, qty); navigate('/cart') }}
-          className="flex-1 btn-outline"
-        >
-          Add to cart
-        </button>
-        <button
-          onClick={() => { addToCart(product, qty); navigate('/checkout') }}
-          className="flex-1 btn-primary"
-        >
-          Buy now
-        </button>
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-2.5 pt-2">
+          <button
+            onClick={() => { addToCart(product, qty); navigate('/cart') }}
+            className="btn-soft"
+          >
+            Add to cart
+          </button>
+          <button
+            onClick={handleBuyNow}
+            className="btn-primary"
+          >
+            Buy now
+          </button>
+        </div>
       </div>
     </div>
   )

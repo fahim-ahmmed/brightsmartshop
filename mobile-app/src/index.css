@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --brand-green: #007A4D;
+  --brand-green: #006E32;
   --brand-green-light: #E8F5E9;
-  --brand-orange: #FF6B00;
+  --brand-orange: #F97316;
   --brand-dark: #0F172A;
 }
 
@@ -26,20 +26,32 @@ html, body, #root {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+@layer utilities {
+  .shadow-xs {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .shadow-2xs {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  }
+}
+
 @layer components {
   .btn-primary {
-    @apply bg-brand-green text-white rounded-xl py-3 px-4 font-semibold text-center transition active:opacity-90;
+    @apply bg-[#006E32] hover:bg-[#005a28] text-white rounded-full py-3 px-5 font-bold text-sm text-center transition active:scale-[0.99] disabled:opacity-50;
+  }
+  .btn-soft {
+    @apply bg-[#E8F5E9] hover:bg-[#d5eed7] text-[#006E32] rounded-full py-3 px-5 font-bold text-sm text-center transition active:scale-[0.99];
   }
   .btn-outline {
-    @apply border border-brand-green text-brand-green rounded-xl py-3 px-4 font-semibold text-center bg-white transition active:bg-brand-green-light;
+    @apply border border-[#006E32] text-[#006E32] rounded-full py-3 px-5 font-bold text-sm text-center bg-white transition active:bg-[#E8F5E9];
   }
   .card {
     @apply bg-white rounded-2xl border border-slate-100 shadow-sm;
   }
   .input-field {
-    @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 outline-none focus:border-brand-green focus:bg-white transition;
+    @apply w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[#006E32] transition;
   }
   .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold;
   }
 }

@@ -2,8 +2,9 @@
   "appId": "com.brightsmartshop.app",
   "appName": "Bright Smart Shop",
   "webDir": "dist",
-  "server": {
-    "url": "https://brightsmartshop24.com",
-    "cleartext": true
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
   }
-} 
+}
