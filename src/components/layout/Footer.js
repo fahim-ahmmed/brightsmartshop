@@ -8,14 +8,13 @@ export default function SiteFooter() {
     <footer className="w-full bg-[#0a231b] text-white font-sans py-6 border-t border-emerald-900/50">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-6">
         
-        {/* 1. TOP HEADER BRAND ROW (COMPACT) */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-emerald-800/40">
+        {/* 1. TOP HEADER BRAND ROW + APP DOWNLOAD CTA */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 pb-5 border-b border-emerald-800/40">
           <div className="flex items-center gap-3">
-            {/* Public Folder Logo */}
             <img 
               src="/logo.jpg" 
               alt="Bright Smart Shop Logo" 
-              className="h-10 sm:h-12 w-auto object-contain"
+              className="h-10 sm:h-12 w-auto object-contain rounded-lg bg-white p-0.5"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = "/logo.svg";
@@ -34,9 +33,36 @@ export default function SiteFooter() {
           <p className="text-xs text-emerald-100/70 max-w-md leading-relaxed">
             Your trusted destination for everyday essentials, bringing quality products and convenient shopping together.
           </p>
+
+          {/* 1-Click Direct Android App Download Banner */}
+          <div className="flex items-center gap-3 bg-emerald-950/80 border border-emerald-500/30 p-3 rounded-2xl shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 shadow-xs">
+              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396"/>
+              </svg>
+            </div>
+            <div className="pr-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 block">
+                Official Mobile App
+              </span>
+              <p className="text-xs font-bold text-white">
+                দ্রুত শপিং করতে অ্যাপ ডাউনলোড করুন
+              </p>
+            </div>
+            <a
+              href="/Bright-Smart-Shop.apk"
+              download="Bright-Smart-Shop.apk"
+              className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl shadow-md hover:shadow-lg active:scale-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
+              <span>Download APK</span>
+            </a>
+          </div>
         </div>
 
-        {/* 2. FOOTER LINKS GRID (SLIM SPACING) */}
+        {/* 2. FOOTER LINKS GRID */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs text-emerald-100/80">
           
           {/* Column 1: Quick Links */}
@@ -51,7 +77,6 @@ export default function SiteFooter() {
                 </Link>
               </li>
               <li>
-                {/* ধরা যাক আপনার About Us পেজটি /about রুটে আছে */}
                 <Link href="/about" className="hover:text-emerald-300 transition-colors">
                   About Us
                 </Link>
@@ -62,7 +87,6 @@ export default function SiteFooter() {
                 </Link>
               </li>
               <li>
-                {/* ধরা যাক আপনার Contact Us পেজটি /contact রুটে আছে */}
                 <Link href="/contact" className="hover:text-emerald-300 transition-colors">
                   Contact Us
                 </Link>
@@ -87,13 +111,11 @@ export default function SiteFooter() {
                 </Link>
               </li>
               <li>
-                {/* 🟢 Shipping & Delivery Policy পেজের সঠিক লিংক */}
                 <Link href="/shipping-policy" className="hover:text-emerald-300 transition-colors">
                   Shipping Policy
                 </Link>
               </li>
               <li>
-                {/* 🟢 Return & Refund Policy পেজের সঠিক লিংক */}
                 <Link href="/return-policy" className="hover:text-emerald-300 transition-colors">
                   Return & Refund
                 </Link>
@@ -108,22 +130,28 @@ export default function SiteFooter() {
             </h3>
             <ul className="space-y-1.5 font-medium">
               <li>
-                {/* 🟢 Privacy Policy পেজের সঠিক লিংক */}
                 <Link href="/privacy-policy" className="hover:text-emerald-300 transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                {/* 🟢 Terms & Conditions পেজের সঠিক লিংক */}
                 <Link href="/terms" className="hover:text-emerald-300 transition-colors">
                   Terms & Conditions
                 </Link>
               </li>
               <li>
-                {/* 🟢 Payment Policy পেজের সঠিক লিংক (যদি আলাদা পেজ থাকে অথবা পলিসি সেকশন হয়) */}
                 <Link href="/payment-policy" className="hover:text-emerald-300 transition-colors">
                   Payment Policy
                 </Link>
+              </li>
+              <li>
+                <a
+                  href="/Bright-Smart-Shop.apk"
+                  download="Bright-Smart-Shop.apk"
+                  className="text-emerald-400 hover:text-emerald-300 font-bold inline-flex items-center gap-1 transition-colors"
+                >
+                  <span>📲 Download Android App</span>
+                </a>
               </li>
             </ul>
           </div>
@@ -151,7 +179,7 @@ export default function SiteFooter() {
 
         </div>
 
-        {/* 3. FOLLOW US & COPYRIGHT BAR (COMPACT ROW) */}
+        {/* 3. FOLLOW US & COPYRIGHT BAR */}
         <div className="pt-4 border-t border-emerald-800/40 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
           
           {/* Social Icons */}
@@ -211,12 +239,12 @@ export default function SiteFooter() {
             </a>
           </div>
 
-           {/* Copyright Text */}
+          {/* Copyright Text */}
           <p className="text-[11px] font-medium text-emerald-200/70 text-center md:text-right">
             © 2026 Bright Smart Shop (BSS). All Rights Reserved.
           </p>
 
-          {/* Developed By Text (Centered) */}
+          {/* Developed By Text */}
           <p className="text-[11px] font-medium text-emerald-200/80 text-center">
             Developed by <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500 tracking-wide drop-shadow-sm">Fahim Ahmmed</span>
           </p>

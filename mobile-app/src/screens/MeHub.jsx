@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Award, Layers, Users, Wallet,
-  ShoppingBag, Heart, UserCheck, LogOut, ChevronRight
+  LayoutDashboard, Trophy, Layers, ShoppingBag,
+  Users, Wallet, UserCheck, Heart,
+  Gift, ShoppingCart, PackageCheck, LogOut
 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { api, resolveImageUrl } from '../api/index.js'
@@ -61,60 +62,91 @@ export default function MeHub() {
   const avatarUrl = resolveImageUrl(u.profileImage || u.image || user?.profileImage)
   const bssId = u.referralCode || u.id || user?.referralCode || 'BSS-20260001'
 
-  const clientMenuItems = [
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
+
+  // স্ক্রিনশট ২-এর মতো ৪-কলামের গোল আইকন গ্রিড মেনু
+  const gridMenuItems = [
     {
       icon: LayoutDashboard,
-      label: 'Dashboard Overview',
-      sub: `${designation} (Level ${level})`,
-      path: '/dashboard?tab=overview',
+      label: 'Dashboard',
+      onClick: () => navigate('/dashboard?tab=overview'),
+      badge: null,
     },
     {
-      icon: Award,
-      label: 'My Level & 24-Level Breakdown',
-      sub: 'Check designation, targets & incentives',
-      path: '/dashboard?tab=levels',
+      icon: Trophy,
+      label: '24 Levels',
+      onClick: () => navigate('/dashboard?tab=levels'),
+      badge: level > 0 ? `L${level}` : null,
     },
     {
       icon: Layers,
-      label: 'My Main ID (M) & Product IDs (P)',
-      sub: `${ownPackages} Global Chain Account IDs`,
-      path: '/dashboard?tab=packages',
-    },
-    {
-      icon: ShoppingBag,
-      label: 'My Orders & Invoices (PDF)',
-      sub: `${totalOrders} purchases`,
-      path: '/orders',
-    },
-    {
-      icon: Users,
-      label: 'My Sponsor List & Referral Link',
-      sub: `${totalSponsors} direct sponsored members`,
-      path: '/dashboard?tab=sponsors',
+      label: 'My IDs (M/P)',
+      onClick: () => navigate('/dashboard?tab=packages'),
+      badge: ownPackages > 0 ? ownPackages : null,
     },
     {
       icon: Wallet,
-      label: 'Payment & Withdraw Wallet',
-      sub: `৳${wallet.toFixed(2)} available (bKash, Nagad, Bank)`,
-      path: '/dashboard?tab=withdraw',
+      label: 'Withdraw',
+      onClick: () => navigate('/dashboard?tab=withdraw'),
+      badge: null,
+    },
+    {
+      icon: ShoppingBag,
+      label: 'My Orders',
+      onClick: () => navigate('/orders'),
+      badge: totalOrders > 0 ? totalOrders : null,
+    },
+    {
+      icon: Users,
+      label: 'My Sponsors',
+      onClick: () => navigate('/dashboard?tab=sponsors'),
+      badge: totalSponsors > 0 ? totalSponsors : null,
     },
     {
       icon: UserCheck,
-      label: 'My Account & Profile',
-      sub: 'Photo, Personal Info, Sponsor & Password',
-      path: '/dashboard?tab=account',
+      label: 'My Account',
+      onClick: () => navigate('/dashboard?tab=account'),
+      badge: null,
     },
     {
       icon: Heart,
-      label: 'My Wishlist & Product Request',
-      sub: `${wishlist.length} saved items`,
-      path: '/wishlist',
+      label: 'Wishlist',
+      onClick: () => navigate('/wishlist'),
+      badge: wishlist.length > 0 ? wishlist.length : null,
+    },
+    {
+      icon: Gift,
+      label: 'Request Item',
+      onClick: () => navigate('/wishlist?tab=request'),
+      badge: null,
+    },
+    {
+      icon: PackageCheck,
+      label: 'Packages',
+      onClick: () => navigate('/category/Package'),
+      badge: null,
+    },
+    {
+      icon: ShoppingCart,
+      label: 'My Cart',
+      onClick: () => navigate('/cart'),
+      badge: cartCount > 0 ? cartCount : null,
+    },
+    {
+      icon: LogOut,
+      label: 'Logout',
+      onClick: handleLogout,
+      badge: null,
+      isDanger: true,
     },
   ]
 
   return (
     <div className="px-4 py-4 space-y-4 font-sans text-gray-800">
-      {/* User Top Profile Card (With Real Profile Photo & BSS-ID) */}
+      {/* Top User Profile Card */}
       <div className="bg-white rounded-3xl border border-gray-100 p-4 shadow-xs space-y-4">
         <div className="flex items-center gap-3.5">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black text-xl flex items-center justify-center shadow-sm overflow-hidden border-2 border-[#00875A] shrink-0">
@@ -145,7 +177,7 @@ export default function MeHub() {
           </div>
         </div>
 
-        {/* Reserve & Balance Strip (Matches Website Dashboard Header) */}
+        {/* Reserve & Balance Strip */}
         <div className="grid grid-cols-2 gap-2.5 pt-1">
           <div className="px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-900 font-black text-xs rounded-2xl flex items-center justify-between">
             <span className="text-[10px] uppercase font-extrabold text-emerald-700">
@@ -156,7 +188,7 @@ export default function MeHub() {
 
           <div
             onClick={() => navigate('/dashboard?tab=withdraw')}
-            className="px-3.5 py-2.5 bg-[#00875A] text-white font-black text-xs rounded-2xl shadow-xs flex items-center justify-between cursor-pointer"
+            className="px-3.5 py-2.5 bg-[#00875A] text-white font-black text-xs rounded-2xl shadow-xs flex items-center justify-between cursor-pointer active:scale-95 transition"
           >
             <span className="bg-emerald-700/80 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-emerald-100">
               Balance
@@ -164,75 +196,57 @@ export default function MeHub() {
             <span className="text-xs">৳{wallet.toFixed(2)}</span>
           </div>
         </div>
-
-        {/* Orders | Wishlist | Cart Quick Row (Matches 11 Me.pdf) */}
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
-          <button
-            onClick={() => navigate('/orders')}
-            className="bg-gray-50 rounded-2xl py-2 text-center"
-          >
-            <p className="text-sm font-black text-gray-900">{totalOrders}</p>
-            <p className="text-[10px] text-gray-500 font-bold">Orders</p>
-          </button>
-          <button
-            onClick={() => navigate('/wishlist')}
-            className="bg-gray-50 rounded-2xl py-2 text-center"
-          >
-            <p className="text-sm font-black text-gray-900">{wishlist.length}</p>
-            <p className="text-[10px] text-gray-500 font-bold">Wishlist</p>
-          </button>
-          <button
-            onClick={() => navigate('/cart')}
-            className="bg-gray-50 rounded-2xl py-2 text-center"
-          >
-            <p className="text-sm font-black text-gray-900">{cartCount}</p>
-            <p className="text-[10px] text-gray-500 font-bold">Cart</p>
-          </button>
-        </div>
       </div>
 
-      {/* Website Client Dashboard Menu List */}
-      <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-xs">
-        <div className="px-4 py-3 bg-gray-50/70 border-b border-gray-100">
-          <span className="text-[10px] font-black text-[#00875A] uppercase tracking-widest">
+      {/* 4-Column Circular Icon Grid Menu (Matches Screenshot 2) */}
+      <div className="bg-white rounded-3xl border border-gray-100 p-5 shadow-xs">
+        <div className="mb-4 pb-2 border-b border-gray-100 flex items-center justify-between">
+          <span className="text-[11px] font-black text-[#00875A] uppercase tracking-widest">
             CLIENT PORTAL MENU
           </span>
+          <span className="text-[10px] font-bold text-gray-400">Tap to open</span>
         </div>
-        {clientMenuItems.map((item, i) => {
-          const Icon = item.icon
-          return (
-            <button
-              key={item.label}
-              onClick={() => navigate(item.path)}
-              className={`w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-slate-50 transition ${
-                i !== clientMenuItems.length - 1 ? 'border-b border-gray-100' : ''
-              }`}
-            >
-              <div className="w-9 h-9 rounded-xl bg-[#E8F5E9] text-[#00875A] flex items-center justify-center shrink-0">
-                <Icon size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold text-gray-900">{item.label}</p>
-                <p className="text-[11px] text-gray-500 truncate">{item.sub}</p>
-              </div>
-              <ChevronRight size={16} className="text-gray-400 shrink-0" />
-            </button>
-          )
-        })}
 
-        <button
-          onClick={() => { logout(); navigate('/') }}
-          className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left border-t border-gray-100 text-rose-600 active:bg-rose-50 transition"
-        >
-          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-            <LogOut size={18} />
-          </div>
-          <span className="flex-1 text-xs font-extrabold">Log out</span>
-          <ChevronRight size={16} className="text-rose-300" />
-        </button>
+        <div className="grid grid-cols-4 gap-x-2 gap-y-5">
+          {gridMenuItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={item.onClick}
+                className="flex flex-col items-center justify-start group active:scale-90 transition-transform"
+              >
+                <div
+                  className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-2xs ${
+                    item.isDanger
+                      ? 'bg-rose-50 border border-rose-200/80 text-rose-600 group-hover:bg-rose-100'
+                      : 'bg-[#FAF3E3] border border-[#EFE0BE] text-[#B88933] group-hover:bg-[#E8F5E9] group-hover:border-[#00875A]/30 group-hover:text-[#00875A]'
+                  }`}
+                >
+                  <Icon size={22} strokeWidth={1.9} />
+
+                  {item.badge !== null && (
+                    <span className="absolute -top-1 -right-1 bg-[#E11D48] text-white text-[10px] font-black rounded-full min-w-[20px] h-[20px] px-1 flex items-center justify-center shadow-xs border-2 border-white">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+
+                <span
+                  className={`mt-2 text-[11px] font-bold text-center leading-tight line-clamp-2 ${
+                    item.isDanger ? 'text-rose-600' : 'text-gray-700'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Website Reserve Points & Main Chain Tracker Dual Cards right inside Me Page */}
+      {/* Reserve Points & Main Chain Tracker Cards */}
       <div className="space-y-3.5">
         <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 text-white p-5 rounded-3xl border border-emerald-400/30 shadow-md space-y-2.5">
           <div className="flex justify-between items-center text-[11px] font-extrabold">
