@@ -32,7 +32,6 @@ export default function AdminLayout({ children }) {
         const role = u.role || "Admin";
         setUserRole(role);
 
-        // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড (/219192026) এবং প্রোডাক্ট পেজ (/219192026/products) এ যাওয়ার অনুমতি থাকবে
         const isSubAdmin = role.toLowerCase() === "sub-admin" || role.toLowerCase() === "subadmin";
         
         if (isSubAdmin) {
@@ -71,13 +70,14 @@ export default function AdminLayout({ children }) {
 
   const isSubAdmin = userRole.toLowerCase() === "sub-admin" || userRole.toLowerCase() === "subadmin";
 
-  // মূল নেভিগেশন লিস্ট
+  // মূল নেভিগেশন লিস্ট (🩸 Blood Bank যুক্ত করা হয়েছে)
   const allNavItems = [
     { label: "Dashboard", href: "/219192026", icon: "📊" },
     { label: "Products & Upload", href: "/219192026/products", icon: "📦" },
+    { label: "Blood Bank", href: "/219192026/blood-bank", icon: "🩸" },
     { label: "Wishlist Requests", href: "/219192026/wishlist", icon: "❤️" },
     { label: "Orders", href: "/219192026/orders", icon: "📋" },
-    { label: "Unordered Customers", href: "/219192026/unordered-customers", icon: "⚠️" }, // 🟢 নতুন যুক্ত করা মেনু
+    { label: "Unordered Customers", href: "/219192026/unordered-customers", icon: "⚠️" },
     { label: "Categories", href: "/219192026/categories", icon: "🏷️" },
     { label: "Withdrawals", href: "/219192026/withdrawals", icon: "💳" },
     { label: "Hero Banners", href: "/219192026/banners", icon: "🖼️" },
@@ -87,7 +87,6 @@ export default function AdminLayout({ children }) {
     { label: "Total Profits", href: "/219192026/profits", icon: "💹" },
   ];
 
-  // 🟢 সাব-এডমিন হলে কেবল ড্যাশবোর্ড এবং প্রোডাক্টস অপশন ফিল্টার করে দেখাবে
   const navItems = isSubAdmin
     ? allNavItems.filter(item => item.href === "/219192026" || item.href === "/219192026/products")
     : allNavItems;
@@ -142,7 +141,6 @@ export default function AdminLayout({ children }) {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden lg:flex w-64 bg-[#0B132B] text-slate-300 flex-col sticky top-0 h-screen border-r border-slate-800/80 justify-between shrink-0">
         <div>
-          {/* Logo */}
           <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
             <img
               src="/logo.jpg"
@@ -159,8 +157,7 @@ export default function AdminLayout({ children }) {
             </div>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="p-4 space-y-1 font-medium text-xs">
+          <nav className="p-4 space-y-1 font-medium text-xs overflow-y-auto max-h-[calc(100vh-170px)]">
             {navItems.map((item, idx) => {
               const isActive = pathname === item.href;
               return (
@@ -181,7 +178,6 @@ export default function AdminLayout({ children }) {
           </nav>
         </div>
 
-        {/* Bottom Website Link & Logout */}
         <div className="p-4 border-t border-slate-800/80 space-y-2">
           <Link
             href="/"

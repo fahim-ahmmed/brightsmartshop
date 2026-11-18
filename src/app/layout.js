@@ -3,14 +3,18 @@
 import "./globals.css";
 import { usePathname } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
+import CustomerReviews from "@/components/layout/CustomerReviews";
 import Footer from "@/components/layout/Footer";
 import { CartProvider } from "@/context/CartContext";
 import { Toaster } from "react-hot-toast";
 
 export default function RootLayout({ children }) {
   const pathname = usePathname();
-  // Check if current path is an admin page
-  const isAdminPage = pathname?.startsWith("/admin");
+  const isAdminPage =
+    pathname?.startsWith("/admin") || pathname?.startsWith("/219192026");
+
+  // শুধুমাত্র হোমপেজে (/) রিভিউ দেখাবে
+  const isHomePage = pathname === "/";
 
   return (
     <html lang="en">
@@ -24,8 +28,8 @@ export default function RootLayout({ children }) {
         <CartProvider>
           {!isAdminPage && <SiteHeader />}
           <main>{children}</main>
+          {isHomePage && <CustomerReviews />}
           {!isAdminPage && <Footer />}
-          {/* টোস্ট নোটিফিকেশন কম্পোনেন্ট */}
           <Toaster position="top-center" reverseOrder={false} />
         </CartProvider>
       </body>

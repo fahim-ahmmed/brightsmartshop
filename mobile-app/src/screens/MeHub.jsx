@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Trophy, Layers, ShoppingBag,
   Users, Wallet, UserCheck, Heart,
-  Gift, ShoppingCart, PackageCheck, LogOut
+  Gift, ShoppingCart, PackageCheck, Star, LogOut
 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { api, resolveImageUrl } from '../api/index.js'
@@ -67,7 +67,7 @@ export default function MeHub() {
     navigate('/')
   }
 
-  // স্ক্রিনশট ২-এর মতো ৪-কলামের গোল আইকন গ্রিড মেনু
+  // আগের সব অপশন ঠিক রেখে নতুন Reviews আইকন যুক্ত করা হয়েছে
   const gridMenuItems = [
     {
       icon: LayoutDashboard,
@@ -136,6 +136,12 @@ export default function MeHub() {
       badge: cartCount > 0 ? cartCount : null,
     },
     {
+      icon: Star,
+      label: 'Reviews',
+      onClick: () => navigate('/reviews'),
+      badge: null,
+    },
+    {
       icon: LogOut,
       label: 'Logout',
       onClick: handleLogout,
@@ -198,7 +204,7 @@ export default function MeHub() {
         </div>
       </div>
 
-      {/* 4-Column Circular Icon Grid Menu (Matches Screenshot 2) */}
+      {/* 4-Column Circular Icon Grid Menu */}
       <div className="bg-white rounded-3xl border border-gray-100 p-5 shadow-xs">
         <div className="mb-4 pb-2 border-b border-gray-100 flex items-center justify-between">
           <span className="text-[11px] font-black text-[#00875A] uppercase tracking-widest">

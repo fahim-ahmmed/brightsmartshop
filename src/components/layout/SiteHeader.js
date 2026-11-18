@@ -16,19 +16,16 @@ const ensureBssId = (val) => {
 export default function SiteHeader() {
   const router = useRouter();
 
-  // Better Auth Live Session Hook
   const { data: session, isPending } = authClient?.useSession
     ? authClient.useSession()
     : { data: null, isPending: false };
 
-  // Fallback LocalStorage State
   const [localUser, setLocalUser] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [displayUserId, setDisplayUserId] = useState("");
   const [displayUserName, setDisplayUserName] = useState("");
   const dropdownRef = useRef(null);
 
-  // Sync with LocalStorage if available
   useEffect(() => {
     const updateUserFromStorage = () => {
       const savedUser = localStorage.getItem("bright_user");
@@ -106,7 +103,6 @@ export default function SiteHeader() {
     }
   }, [currentUser?.id, currentUser?.mobile]);
 
-  // 🟢 সব জায়গায় একই নাম এবং একই BSS- আইডি নিশ্চিত করা
   const finalUserId =
     ensureBssId(
       displayUserId ||
@@ -117,7 +113,6 @@ export default function SiteHeader() {
 
   const finalUserName = displayUserName || currentUser?.name || "Customer";
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -171,7 +166,7 @@ export default function SiteHeader() {
   return (
     <>
       <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50 shadow-2xs font-sans h-16 sm:h-20">
-        <div className="max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-2 sm:gap-6">
+        <div className="max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-2 sm:gap-5">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0 group">
             <img
@@ -179,7 +174,7 @@ export default function SiteHeader() {
               alt="Bright Smart Shop Logo"
               className="h-8 sm:h-12 w-auto object-contain rounded-xl group-hover:scale-105 transition-transform"
             />
-            <span className="font-serif font-black text-sm sm:text-2xl text-[#00875A] tracking-tight truncate max-w-[110px] sm:max-w-none">
+            <span className="font-serif font-black text-sm sm:text-2xl text-[#00875A] tracking-tight truncate max-w-[105px] sm:max-w-none">
               Bright Smart Shop
             </span>
           </Link>
@@ -210,7 +205,19 @@ export default function SiteHeader() {
           </form>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+            {/* 🩸 Blood Bank Button */}
+            <Link
+              href="/blood-bank"
+              title="ব্লাড ব্যাংক (Blood Bank)"
+              className="relative flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-2xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 transition-all group cursor-pointer shadow-2xs"
+            >
+              <span className="text-base sm:text-lg group-hover:scale-110 transition-transform">🩸</span>
+              <span className="hidden xl:inline text-xs font-black tracking-tight">
+                Blood Bank
+              </span>
+            </Link>
+
             {/* Wishlist */}
             <Link
               href="/wishlist"
@@ -296,7 +303,6 @@ export default function SiteHeader() {
                     </svg>
                   </button>
 
-                  {/* Dropdown Menu */}
                   {dropdownOpen && (
                     <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                       <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50/50">
@@ -313,6 +319,15 @@ export default function SiteHeader() {
                       >
                         <span>📊</span>
                         <span>My Dashboard</span>
+                      </Link>
+
+                      <Link
+                        href="/blood-bank"
+                        onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-extrabold text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <span>🩸</span>
+                        <span>Blood Bank</span>
                       </Link>
 
                       <Link
@@ -366,13 +381,12 @@ export default function SiteHeader() {
         </div>
       </header>
 
-      {/* 🛒 Side Cart Drawer */}
+      {/* Side Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden font-sans">
           <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
-              {/* Header */}
               <div className="p-6 bg-[#00875A] text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">🛒</span>
@@ -382,7 +396,6 @@ export default function SiteHeader() {
                 <button onClick={() => setIsCartOpen(false)} className="w-8 h-8 rounded-full bg-white/10 text-white font-bold text-lg cursor-pointer">✕</button>
               </div>
 
-              {/* Cart Items List */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {cartItems.length > 0 ? (
                   cartItems.map((item, idx) => {
@@ -392,7 +405,6 @@ export default function SiteHeader() {
 
                     return (
                       <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl shadow-2xs gap-3">
-                        {/* Image & Title/Price */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <img
                             src={item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&q=80"}
@@ -405,7 +417,6 @@ export default function SiteHeader() {
                           </div>
                         </div>
 
-                        {/* Controls + Points Underneath */}
                         <div className="flex flex-col items-center gap-1 shrink-0">
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-gray-200">
@@ -431,7 +442,6 @@ export default function SiteHeader() {
                 )}
               </div>
 
-              {/* Footer Subtotal & Total Points */}
               {cartItems.length > 0 && (
                 <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
                   <div className="flex items-center justify-between text-sm font-black text-gray-900">

@@ -425,7 +425,7 @@ export default function HomePage() {
           <section className="max-w-[1400px] mx-auto px-3 sm:px-8 space-y-5">
             <div className="flex items-center justify-between border-l-6 border-[#F25C05] pl-3 sm:pl-4">
               <h2 className="text-xl sm:text-3xl font-black text-[#00875A] tracking-tight">
-                Package Products <span className="text-sm sm:text-lg font-bold text-gray-500">/ প্যাকেজ প্রোডাক্ট</span>
+                Package Products <span className="text-sm sm:text-lg font-bold text-gray-500"> </span>
               </h2>
             </div>
 

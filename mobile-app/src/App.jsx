@@ -18,6 +18,8 @@ import MeHub from './screens/MeHub.jsx'
 import Dashboard from './screens/Dashboard.jsx'
 import MyOrders from './screens/MyOrders.jsx'
 import TrackOrder from './screens/TrackOrder.jsx'
+import BloodBank from './screens/BloodBank.jsx'
+import Reviews from './screens/Reviews.jsx'
 
 const hideChromeRoutes = ['/login', '/register']
 
@@ -45,19 +47,18 @@ export default function App() {
       {hideChrome ? null : <Header />}
       <main className={`flex-1 ${hideChrome ? '' : 'pb-24'}`}>
         <Routes>
-          {/* অ্যাপ ওপেন করলেই সরাসরি Home পেজ দেখাবে */}
           <Route path="/" element={<Home />} />
+          <Route path="/blood-bank" element={<BloodBank />} />
+          <Route path="/reviews" element={<Reviews />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/category/:name" element={<CategoryProducts />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/cart" element={<CartRoute />} />
           <Route path="/wishlist" element={<Wishlist />} />
 
-          {/* লগইন ও রেজিস্টার */}
           <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
           <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
 
-          {/* পারচেজ (Checkout) বা প্রোফাইল/ড্যাশবোর্ডে গেলে লগইন না থাকলে লগইন চাবে */}
           <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
           <Route path="/me" element={<ProtectedRoute><MeHub /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

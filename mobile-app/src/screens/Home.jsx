@@ -1,3 +1,4 @@
+import ReviewsSection from '../components/ReviewsSection.jsx'
 import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
@@ -242,6 +243,7 @@ export default function Home() {
               </div>
             )}
           </section>
+          <ReviewsSection />
         </>
       )}
     </div>

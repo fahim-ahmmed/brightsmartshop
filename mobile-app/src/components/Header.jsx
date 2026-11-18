@@ -27,18 +27,30 @@ export default function Header() {
   const avatarUrl = resolveImageUrl(user?.profileImage || user?.image)
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-slate-100 px-4 py-2.5 flex items-center justify-between shadow-2xs">
-      <Link to="/" className="flex items-center gap-2.5 min-w-0">
+    <header className="sticky top-0 z-30 bg-white border-b border-slate-100 px-3 py-2.5 flex items-center justify-between shadow-2xs gap-2">
+      <Link to="/" className="flex items-center gap-2 min-w-0">
         <BssLogo size="md" />
         <div className="leading-tight truncate">
-          <p className="font-serif font-black text-base text-[#00875A] tracking-tight truncate">
+          <p className="font-serif font-black text-sm text-[#00875A] tracking-tight truncate">
             Bright Smart Shop
           </p>
-          <p className="text-[10px] text-slate-500 font-medium">Smart Shopping, Better Living</p>
+          <p className="text-[10px] text-slate-500 font-medium truncate">
+            Smart Shopping, Better Living
+          </p>
         </div>
       </Link>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
+        {/* 🩸 Blood Bank Icon Button */}
+        <Link
+          to="/blood-bank"
+          className="relative w-9 h-9 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-base active:scale-95 transition"
+          aria-label="Blood Bank"
+          title="ব্লাড ব্যাংক (Blood Bank)"
+        >
+          🩸
+        </Link>
+
         <Link
           to="/wishlist"
           className="relative w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 active:scale-95 transition"
