@@ -131,10 +131,10 @@ export default function BloodBankPage() {
       <section className="bg-gradient-to-r from-red-900 via-rose-800 to-red-900 text-white py-10 px-4">
         <div className="max-w-5xl mx-auto text-center space-y-4">
           <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/25 px-3.5 py-1 rounded-full text-xs font-extrabold tracking-wider uppercase">
-            <span>🩸</span> Bright Smart Shop মানবিক উদ্যোগ
+            <span>🩸</span> Bright Smart Shop এর মানবিক উদ্যোগ
           </span>
           <h1 className="text-2xl sm:text-4xl font-black tracking-tight">
-            ব্রাইট স্মার্ট শপ ব্লাড ব্যাংক
+            ব্রাইট স্মার্ট  ব্লাড ব্যাংক
           </h1>
           <p className="text-xs sm:text-sm text-red-100 max-w-2xl mx-auto leading-relaxed">
             এক ব্যাগ রক্ত বাঁচাতে পারে একটি প্রাণ। আপনি রক্তদাতা (Donor) হিসেবে যুক্ত হোন অথবা জরুরি প্রয়োজনে নির্দিষ্ট গ্রুপের রক্তদাতা খুঁজে রিকোয়েস্ট পাঠান।
